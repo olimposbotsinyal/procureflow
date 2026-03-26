@@ -1,20 +1,8 @@
 ﻿# Python
 __pycache__/
-**/__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-**/*.pyc
-
-# Virtual environments
+*.pyc
 .venv/
-api/.venv/
 
-# Env files (secrets)
-.env
-.env.*
-api/.env
-
-# OS / IDE
-.vscode/
-.idea/
+# SQLite
+*.db
+api/*.db
