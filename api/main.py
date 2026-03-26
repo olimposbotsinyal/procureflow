@@ -1,5 +1,8 @@
 from fastapi import FastAPI
-from routers.health import router as health_router
+from database import Base, engine
+from routers.quotes import router as quotes_router
+
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="ProcureFlow API")
 
@@ -7,6 +10,8 @@ app = FastAPI(title="ProcureFlow API")
 def root():
     return {"message": "ProcureFlow API ayakta"}
 
-app.include_router(health_router)
-from routers.quotes import router as quotes_router
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
 app.include_router(quotes_router)
