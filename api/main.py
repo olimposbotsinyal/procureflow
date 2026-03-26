@@ -8,3 +8,5 @@ def root():
     return {"message": "ProcureFlow API ayakta"}
 
 app.include_router(health_router)
+from routers.quotes import router as quotes_router
+app.include_router(quotes_router)
