@@ -1,3 +1,4 @@
+﻿# api\core\config.py
 from dotenv import load_dotenv
 import os
 
@@ -10,3 +11,4 @@ DB_USER = os.getenv("DB_USER", "postgres")
 DB_PASS = os.getenv("DB_PASS", "")
 
 DATABASE_URL = f"postgresql+psycopg://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+

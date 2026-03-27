@@ -1,11 +1,21 @@
-from sqlalchemy import create_engine, text
-from core.config import DATABASE_URL
+﻿# api\db\session.py
+from sqlalchemy import text
+from api.database import SessionLocal
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 def test_db_connection() -> bool:
+    db = SessionLocal()
     try:
-        engine = create_engine(DATABASE_URL, pool_pre_ping=True)
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
+        db.execute(text("SELECT 1"))
         return True
     except Exception:
         return False
+    finally:
+        db.close()
+

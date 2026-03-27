@@ -1,5 +1,6 @@
+﻿# health.py
 from fastapi import APIRouter
-from db.session import test_db_connection
+from api.db.session import test_db_connection
 
 router = APIRouter(prefix="/health", tags=["health"])
 
@@ -10,3 +11,4 @@ def health():
 @router.get("/db")
 def health_db():
     return {"database": "ok" if test_db_connection() else "down"}
+

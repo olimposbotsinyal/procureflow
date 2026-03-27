@@ -1,17 +1,22 @@
+﻿# api\main.py
 from fastapi import FastAPI
-from database import Base, engine
-from routers.quotes import router as quotes_router
+from fastapi.middleware.cors import CORSMiddleware
 
-Base.metadata.create_all(bind=engine)
+from .routers import health, quotes, auth
+from dotenv import load_dotenv
+load_dotenv()
 
-app = FastAPI(title="ProcureFlow API")
+app = FastAPI(title="ProcureFlow API", version="1.1.0")
 
-@app.get("/")
-def root():
-    return {"message": "ProcureFlow API ayakta"}
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@app.get("/health")
-def health():
-    return {"status": "ok"}
+app.include_router(health.router, prefix="/api/v1")
+app.include_router(quotes.router, prefix="/api/v1")
+app.include_router(auth.router, prefix="/api/v1")
 
-app.include_router(quotes_router)
