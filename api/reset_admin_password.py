@@ -1,7 +1,7 @@
-﻿# reset_admin_password.py
+# reset_admin_password.py
 from sqlalchemy import select
 from api.database import SessionLocal
-from api.models.user import User   # kritik: doÄŸru model yolu
+from api.models.user import User  # kritik: doÄŸru model yolu
 from api.core.security import get_password_hash
 
 EMAIL = "admin@procureflow.dev"
@@ -28,4 +28,3 @@ except Exception as e:
 finally:
     db.close()
     print("Script bitti.")
-

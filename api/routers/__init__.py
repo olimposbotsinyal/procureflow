@@ -1,2 +1,2 @@
-﻿# intentionally empty
+# intentionally empty
 

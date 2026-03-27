@@ -1,4 +1,4 @@
-﻿# api\routers\auth.py
+# api\routers\auth.py
 from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
@@ -38,4 +38,3 @@ def me(current_user: User = Depends(get_current_user)):
         "email": current_user.email,
         "role": current_user.role,
     }
-

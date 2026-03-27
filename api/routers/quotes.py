@@ -1,4 +1,4 @@
-﻿# api/routers/quotes.py
+# api/routers/quotes.py
 from datetime import datetime, UTC
 from typing import Literal
 
@@ -76,7 +76,9 @@ def list_quotes(
     q: str | None = Query(None, description="Title contains"),
     min_amount: float | None = Query(None, ge=0),
     max_amount: float | None = Query(None, ge=0),
-    status_filter: Literal["draft", "submitted", "approved", "rejected"] | None = Query(None),
+    status_filter: Literal["draft", "submitted", "approved", "rejected"] | None = Query(
+        None
+    ),
     sort_by: Literal["created_at", "amount", "id"] = Query("created_at"),
     sort_order: Literal["asc", "desc"] = Query("desc"),
     include_deleted: bool = Query(False),
@@ -240,7 +242,9 @@ def submit_quote(
     _ensure_owner_or_admin(current_user, row)
 
     if row.deleted_at is not None:
-        raise HTTPException(status_code=409, detail="Cannot change status of a deleted quote")
+        raise HTTPException(
+            status_code=409, detail="Cannot change status of a deleted quote"
+        )
 
     _ensure_transition(row.status, {"draft"})
     previous_status = row.status
@@ -264,7 +268,9 @@ def approve_quote(
     row = _get_quote_or_404(quote_id, db)
 
     if row.deleted_at is not None:
-        raise HTTPException(status_code=409, detail="Cannot change status of a deleted quote")
+        raise HTTPException(
+            status_code=409, detail="Cannot change status of a deleted quote"
+        )
 
     _ensure_transition(row.status, {"submitted"})
     previous_status = row.status
@@ -288,7 +294,9 @@ def reject_quote(
     row = _get_quote_or_404(quote_id, db)
 
     if row.deleted_at is not None:
-        raise HTTPException(status_code=409, detail="Cannot change status of a deleted quote")
+        raise HTTPException(
+            status_code=409, detail="Cannot change status of a deleted quote"
+        )
 
     _ensure_transition(row.status, {"submitted"})
     previous_status = row.status

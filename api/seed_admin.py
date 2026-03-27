@@ -1,4 +1,4 @@
-﻿from api.db.session import SessionLocal
+from api.db.session import SessionLocal
 from api.models import User
 from api.core.security import get_password_hash
 
@@ -41,4 +41,3 @@ def run():
 
 if __name__ == "__main__":
     run()
-

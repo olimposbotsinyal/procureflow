@@ -20,7 +20,7 @@ def test_quote_crud_flow(client, auth_headers):
     r_update = client.put(
         f"/api/v1/quotes/{quote_id}",
         json={"title": "Updated Quote", "amount": 999.99},
-        headers=auth_headers
+        headers=auth_headers,
     )
     assert r_update.status_code == 200
     updated = r_update.json()
@@ -58,7 +58,9 @@ def test_quote_status_workflow_submit_and_approve(client, auth_headers):
     assert r_approve.status_code == 200, r_approve.text
     assert r_approve.json()["status"] == "approved"
 
-    r_reject_after_approved = client.post(f"/api/v1/quotes/{qid}/reject", headers=auth_headers)
+    r_reject_after_approved = client.post(
+        f"/api/v1/quotes/{qid}/reject", headers=auth_headers
+    )
     assert r_reject_after_approved.status_code == 409
 
 
@@ -93,21 +95,33 @@ def test_quote_status_workflow_submit_and_reject(client, auth_headers):
     assert r_reject.json()["status"] == "rejected"
 
 
-def test_non_admin_cannot_approve_or_reject(client, user_auth_headers, admin_auth_headers):
-    r_create = client.post("/api/v1/quotes/", json={"title": "RBAC", "amount": 50}, headers=user_auth_headers)
+def test_non_admin_cannot_approve_or_reject(
+    client, user_auth_headers, admin_auth_headers
+):
+    r_create = client.post(
+        "/api/v1/quotes/",
+        json={"title": "RBAC", "amount": 50},
+        headers=user_auth_headers,
+    )
     qid = r_create.json()["id"]
 
     r_submit = client.post(f"/api/v1/quotes/{qid}/submit", headers=user_auth_headers)
     assert r_submit.status_code == 200
 
-    r_approve_user = client.post(f"/api/v1/quotes/{qid}/approve", headers=user_auth_headers)
+    r_approve_user = client.post(
+        f"/api/v1/quotes/{qid}/approve", headers=user_auth_headers
+    )
     assert r_approve_user.status_code == 403
 
-    r_approve_admin = client.post(f"/api/v1/quotes/{qid}/approve", headers=admin_auth_headers)
+    r_approve_admin = client.post(
+        f"/api/v1/quotes/{qid}/approve", headers=admin_auth_headers
+    )
     assert r_approve_admin.status_code == 200
 
 
-def test_status_history_owner_can_view_and_sequence_is_correct(client, user_auth_headers, admin_auth_headers):
+def test_status_history_owner_can_view_and_sequence_is_correct(
+    client, user_auth_headers, admin_auth_headers
+):
     create_res = client.post(
         "/api/v1/quotes/",
         json={"title": "History Test Quote", "amount": 2500},
@@ -144,7 +158,9 @@ def test_status_history_owner_can_view_and_sequence_is_correct(client, user_auth
     assert logs[1]["to_status"] == "approved"
 
 
-def test_status_history_non_owner_non_admin_cannot_view(client, user_auth_headers, other_user_auth_headers):
+def test_status_history_non_owner_non_admin_cannot_view(
+    client, user_auth_headers, other_user_auth_headers
+):
     create_res = client.post(
         "/api/v1/quotes/",
         json={"title": "Private History Quote", "amount": 900},

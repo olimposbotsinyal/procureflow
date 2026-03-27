@@ -1,9 +1,9 @@
 # tests\test_auth.py
 def test_login_success(client):
-    r = client.post("/api/v1/auth/login", json={
-        "email": "admin@procureflow.dev",
-        "password": "Admin123!"
-    })
+    r = client.post(
+        "/api/v1/auth/login",
+        json={"email": "admin@procureflow.dev", "password": "Admin123!"},
+    )
     assert r.status_code == 200
     body = r.json()
     assert "access_token" in body
@@ -11,10 +11,10 @@ def test_login_success(client):
 
 
 def test_login_fail(client):
-    r = client.post("/api/v1/auth/login", json={
-        "email": "admin@procureflow.dev",
-        "password": "wrong-password"
-    })
+    r = client.post(
+        "/api/v1/auth/login",
+        json={"email": "admin@procureflow.dev", "password": "wrong-password"},
+    )
     # Projende 400/401 olabilir; ikisini de kabul edelim
     assert r.status_code in (400, 401)
 

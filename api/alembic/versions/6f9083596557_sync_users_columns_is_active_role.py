@@ -1,10 +1,11 @@
-﻿"""sync users columns is_active role
+"""sync users columns is_active role
 
 Revision ID: 6f9083596557
 Revises: 12eb4ffa3625
 Create Date: 2026-03-27 07:18:12.544755
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -12,8 +13,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '6f9083596557'
-down_revision: Union[str, Sequence[str], None] = '12eb4ffa3625'
+revision: str = "6f9083596557"
+down_revision: Union[str, Sequence[str], None] = "12eb4ffa3625"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -33,10 +34,11 @@ def upgrade() -> None:
         op.execute("UPDATE users SET is_active = TRUE WHERE is_active IS NULL")
         op.alter_column("users", "is_active", nullable=False)
 
+
 def downgrade() -> None:
     bind = op.get_bind()
     inspector = sa.inspect(bind)
-    cols = {c['name'] for c in inspector.get_columns('users')}
+    cols = {c["name"] for c in inspector.get_columns("users")}
 
     if "is_active" in cols:
         op.drop_column("users", "is_active")

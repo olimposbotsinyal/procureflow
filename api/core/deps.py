@@ -1,4 +1,4 @@
-﻿# api\core\deps.py
+# api\core\deps.py
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
@@ -49,4 +49,3 @@ def require_role(required_role: str):
         return current_user
 
     return _checker
-

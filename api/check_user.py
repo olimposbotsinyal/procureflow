@@ -1,4 +1,4 @@
-﻿from api.db.session import SessionLocal
+from api.db.session import SessionLocal
 from api.models import User
 
 db = SessionLocal()
@@ -8,4 +8,3 @@ try:
         print(u.id, u.email, u.role, u.is_active)
 finally:
     db.close()
-
