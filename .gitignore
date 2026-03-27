@@ -1,8 +1,16 @@
+
+# virtualenv
 .venv/
 api/.venv/
+
+# python cache
 __pycache__/
+*.pyc
 *.py[cod]
+
+# pytest cache
 .pytest_cache/
+
 .mypy_cache/
 .coverage
 htmlcov/
@@ -10,5 +18,8 @@ htmlcov/
 *.sqlite3
 test.db
 api/procureflow.db
+
+# env files
 .env
-api/.env
+.env.*
+!.env.example
