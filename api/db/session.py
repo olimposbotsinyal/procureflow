@@ -1,4 +1,4 @@
-﻿from sqlalchemy import text
+from sqlalchemy import text
 from api.database import SessionLocal
 
 

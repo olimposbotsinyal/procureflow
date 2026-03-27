@@ -1,4 +1,4 @@
-﻿# api\legacy_models.py
+# api\legacy_models.py
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Float
 from sqlalchemy.orm import relationship
@@ -33,5 +33,3 @@ class Quote(Base):
     deleted_by = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     owner = relationship("User", foreign_keys=[user_id])
-
-

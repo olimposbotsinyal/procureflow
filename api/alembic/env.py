@@ -1,4 +1,4 @@
-﻿from logging.config import fileConfig
+from logging.config import fileConfig
 from pathlib import Path
 import sys
 import os
@@ -9,8 +9,8 @@ from dotenv import load_dotenv
 
 # --- Paths ---
 # .../procureflow/api/alembic/env.py
-API_DIR = Path(__file__).resolve().parents[1]       # .../procureflow/api
-PROJECT_ROOT = API_DIR.parent                         # .../procureflow
+API_DIR = Path(__file__).resolve().parents[1]  # .../procureflow/api
+PROJECT_ROOT = API_DIR.parent  # .../procureflow
 
 # Python path'e proje kökünü ekle ki "api.*" importları her yerden çalışsın
 if str(PROJECT_ROOT) not in sys.path:
@@ -74,4 +74,3 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
-    

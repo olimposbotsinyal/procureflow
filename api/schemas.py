@@ -1,4 +1,4 @@
-﻿# schemas.py
+# schemas.py
 from pydantic import BaseModel, ConfigDict
 from datetime import datetime
 
@@ -38,4 +38,3 @@ class QuoteListOut(BaseModel):
 
 class MessageOut(BaseModel):
     message: str
-
