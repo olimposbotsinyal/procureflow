@@ -92,3 +92,16 @@ def test_quote_status_workflow_submit_and_reject(client, auth_headers):
     r_reject = client.post(f"/api/v1/quotes/{qid}/reject", headers=auth_headers)
     assert r_reject.status_code == 200, r_reject.text
     assert r_reject.json()["status"] == "rejected"
+
+def test_non_admin_cannot_approve_or_reject(client, user_auth_headers, admin_auth_headers):
+    r_create = client.post("/api/v1/quotes/", json={"title": "RBAC", "amount": 50}, headers=user_auth_headers)
+    qid = r_create.json()["id"]
+
+    r_submit = client.post(f"/api/v1/quotes/{qid}/submit", headers=user_auth_headers)
+    assert r_submit.status_code == 200
+
+    r_approve_user = client.post(f"/api/v1/quotes/{qid}/approve", headers=user_auth_headers)
+    assert r_approve_user.status_code == 403
+
+    r_approve_admin = client.post(f"/api/v1/quotes/{qid}/approve", headers=admin_auth_headers)
+    assert r_approve_admin.status_code == 200

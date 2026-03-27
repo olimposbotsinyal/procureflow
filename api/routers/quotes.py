@@ -235,6 +235,8 @@ def approve_quote(
 ):
     row = _get_quote_or_404(quote_id, db)
     _ensure_owner_or_admin(current_user, row)
+    _ensure_admin(current_user)
+    row = _get_quote_or_404(quote_id, db)
 
     if row.deleted_at is not None:
         raise HTTPException(status_code=409, detail="Cannot change status of a deleted quote")
@@ -257,7 +259,8 @@ def reject_quote(
 ):
     row = _get_quote_or_404(quote_id, db)
     _ensure_owner_or_admin(current_user, row)
-
+    _ensure_admin(current_user)
+    row = _get_quote_or_404(quote_id, db)
     if row.deleted_at is not None:
         raise HTTPException(status_code=409, detail="Cannot change status of a deleted quote")
 
@@ -269,3 +272,10 @@ def reject_quote(
     db.commit()
     db.refresh(row)
     return row
+
+def _ensure_admin(current_user: User) -> None:
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required",
+        )
