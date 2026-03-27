@@ -1,3 +1,4 @@
+# tests\conftest.py
 import os
 import pytest
 from fastapi.testclient import TestClient
@@ -18,11 +19,11 @@ def setup_test_db():
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
 
-    # admin seed
+    # admin + user seed
     db = SessionLocal()
     try:
-        existing = db.query(User).filter(User.email == "admin@procureflow.dev").first()
-        if not existing:
+        admin = db.query(User).filter(User.email == "admin@procureflow.dev").first()
+        if not admin:
             admin = User(
                 email="admin@procureflow.dev",
                 hashed_password=get_password_hash("Admin123!"),
@@ -31,7 +32,19 @@ def setup_test_db():
                 is_active=True,
             )
             db.add(admin)
-            db.commit()
+
+        user = db.query(User).filter(User.email == "user@procureflow.dev").first()
+        if not user:
+            user = User(
+                email="user@procureflow.dev",
+                hashed_password=get_password_hash("User123!"),
+                full_name="Normal User",
+                role="user",
+                is_active=True,
+            )
+            db.add(user)
+
+        db.commit()
     finally:
         db.close()
 
@@ -48,9 +61,24 @@ def client():
 
 
 @pytest.fixture(scope="session")
-def auth_headers(client):
+def admin_auth_headers(client):
     payload = {"email": "admin@procureflow.dev", "password": "Admin123!"}
     r = client.post("/api/v1/auth/login", json=payload)
     assert r.status_code == 200, r.text
     token = r.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture(scope="session")
+def user_auth_headers(client):
+    payload = {"email": "user@procureflow.dev", "password": "User123!"}
+    r = client.post("/api/v1/auth/login", json=payload)
+    assert r.status_code == 200, r.text
+    token = r.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+# backward compatibility (eski testler kırılmasın)
+@pytest.fixture(scope="session")
+def auth_headers(admin_auth_headers):
+    return admin_auth_headers
