@@ -32,3 +32,16 @@ pip install -r requirements.txt
 
 
 
+## Environment Setup
+
+1. Copy example file:
+   cp .env.example .env
+
+2. Edit `.env` values for local development.
+
+3. Run seed:
+   python api/seed_admin.py
+
+
+PowerShell:
+Copy-Item .env.example .env
