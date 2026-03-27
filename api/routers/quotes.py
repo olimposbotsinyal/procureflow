@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from api.db.session import get_db
 from api.core.deps import get_current_user
-from api.models import Quote, User
+from api.models import Quote, User, QuoteStatusLog
 from api.schemas import QuoteCreate, QuoteUpdate, QuoteOut, QuoteListOut, MessageOut
 
 router = APIRouter(prefix="/quotes", tags=["quotes"])
@@ -34,12 +34,37 @@ def _ensure_owner_or_admin(current_user: User, row: Quote) -> None:
         )
 
 
+def _ensure_admin(current_user: User) -> None:
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required",
+        )
+
+
 def _ensure_transition(current: str, allowed_from: set[str]) -> None:
     if current not in allowed_from:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Invalid status transition from '{current}'",
         )
+
+
+def _log_status_change(
+    db: Session,
+    quote_id: int,
+    actor_id: int,
+    from_status: str,
+    to_status: str,
+) -> None:
+    db.add(
+        QuoteStatusLog(
+            quote_id=quote_id,
+            changed_by=actor_id,
+            from_status=from_status,
+            to_status=to_status,
+        )
+    )
 
 
 @router.get("/", response_model=QuoteListOut)
@@ -218,9 +243,11 @@ def submit_quote(
         raise HTTPException(status_code=409, detail="Cannot change status of a deleted quote")
 
     _ensure_transition(row.status, {"draft"})
+    previous_status = row.status
     row.status = "submitted"
     row.updated_at = datetime.now(UTC)
     row.updated_by = current_user.id
+    _log_status_change(db, row.id, current_user.id, previous_status, row.status)
 
     db.commit()
     db.refresh(row)
@@ -240,9 +267,11 @@ def approve_quote(
         raise HTTPException(status_code=409, detail="Cannot change status of a deleted quote")
 
     _ensure_transition(row.status, {"submitted"})
+    previous_status = row.status
     row.status = "approved"
     row.updated_at = datetime.now(UTC)
     row.updated_by = current_user.id
+    _log_status_change(db, row.id, current_user.id, previous_status, row.status)
 
     db.commit()
     db.refresh(row)
@@ -262,18 +291,30 @@ def reject_quote(
         raise HTTPException(status_code=409, detail="Cannot change status of a deleted quote")
 
     _ensure_transition(row.status, {"submitted"})
+    previous_status = row.status
     row.status = "rejected"
     row.updated_at = datetime.now(UTC)
     row.updated_by = current_user.id
+    _log_status_change(db, row.id, current_user.id, previous_status, row.status)
 
     db.commit()
     db.refresh(row)
     return row
 
 
-def _ensure_admin(current_user: User) -> None:
-    if current_user.role != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin privileges required",
-        )
+@router.get("/{quote_id}/status-history")
+def get_status_history(
+    quote_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    row = _get_quote_or_404(quote_id, db)
+    _ensure_owner_or_admin(current_user, row)
+
+    logs = (
+        db.query(QuoteStatusLog)
+        .filter(QuoteStatusLog.quote_id == quote_id)
+        .order_by(QuoteStatusLog.id.asc())
+        .all()
+    )
+    return logs

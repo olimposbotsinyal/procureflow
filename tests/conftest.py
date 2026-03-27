@@ -82,3 +82,13 @@ def user_auth_headers(client):
 @pytest.fixture(scope="session")
 def auth_headers(admin_auth_headers):
     return admin_auth_headers
+
+
+@pytest.fixture(scope="session")
+def other_user_auth_headers(client):
+    # seed edilmiş olmalı: other@procureflow.dev / Other123!
+    payload = {"email": "other@procureflow.dev", "password": "Other123!"}
+    r = client.post("/api/v1/auth/login", json=payload)
+    assert r.status_code == 200, r.text
+    token = r.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
