@@ -1,6 +1,6 @@
-﻿# api\db\session.py
-from sqlalchemy import text
+﻿from sqlalchemy import text
 from api.database import SessionLocal
+
 
 def get_db():
     db = SessionLocal()
@@ -8,6 +8,7 @@ def get_db():
         yield db
     finally:
         db.close()
+
 
 def test_db_connection() -> bool:
     db = SessionLocal()
@@ -18,4 +19,3 @@ def test_db_connection() -> bool:
         return False
     finally:
         db.close()
-
