@@ -2,6 +2,17 @@
 from api.models import User
 from api.core.security import get_password_hash
 
+other = db.query(User).filter(User.email == "other@procureflow.dev").first()
+if not other:
+    other = User(
+        email="other@procureflow.dev",
+        hashed_password=get_password_hash("Other123!"),
+        full_name="Other User",
+        role="user",
+        is_active=True,
+    )
+    db.add(other)
+
 
 def run():
     db = SessionLocal()

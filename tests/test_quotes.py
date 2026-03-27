@@ -1,4 +1,3 @@
-# tests\test_quotes.py
 def test_quotes_requires_auth(client):
     r = client.get("/api/v1/quotes/")
     assert r.status_code in (401, 403)
@@ -93,6 +92,7 @@ def test_quote_status_workflow_submit_and_reject(client, auth_headers):
     assert r_reject.status_code == 200, r_reject.text
     assert r_reject.json()["status"] == "rejected"
 
+
 def test_non_admin_cannot_approve_or_reject(client, user_auth_headers, admin_auth_headers):
     r_create = client.post("/api/v1/quotes/", json={"title": "RBAC", "amount": 50}, headers=user_auth_headers)
     qid = r_create.json()["id"]
@@ -105,3 +105,62 @@ def test_non_admin_cannot_approve_or_reject(client, user_auth_headers, admin_aut
 
     r_approve_admin = client.post(f"/api/v1/quotes/{qid}/approve", headers=admin_auth_headers)
     assert r_approve_admin.status_code == 200
+
+
+def test_status_history_owner_can_view_and_sequence_is_correct(client, user_auth_headers, admin_auth_headers):
+    create_res = client.post(
+        "/api/v1/quotes/",
+        json={"title": "History Test Quote", "amount": 2500},
+        headers=user_auth_headers,
+    )
+    assert create_res.status_code == 201, create_res.text
+    quote_id = create_res.json()["id"]
+
+    submit_res = client.post(
+        f"/api/v1/quotes/{quote_id}/submit",
+        headers=user_auth_headers,
+    )
+    assert submit_res.status_code == 200, submit_res.text
+    assert submit_res.json()["status"] == "submitted"
+
+    approve_res = client.post(
+        f"/api/v1/quotes/{quote_id}/approve",
+        headers=admin_auth_headers,
+    )
+    assert approve_res.status_code == 200, approve_res.text
+    assert approve_res.json()["status"] == "approved"
+
+    history_res = client.get(
+        f"/api/v1/quotes/{quote_id}/status-history",
+        headers=user_auth_headers,
+    )
+    assert history_res.status_code == 200, history_res.text
+    logs = history_res.json()
+
+    assert len(logs) == 2
+    assert logs[0]["from_status"] == "draft"
+    assert logs[0]["to_status"] == "submitted"
+    assert logs[1]["from_status"] == "submitted"
+    assert logs[1]["to_status"] == "approved"
+
+
+def test_status_history_non_owner_non_admin_cannot_view(client, user_auth_headers, other_user_auth_headers):
+    create_res = client.post(
+        "/api/v1/quotes/",
+        json={"title": "Private History Quote", "amount": 900},
+        headers=user_auth_headers,
+    )
+    assert create_res.status_code == 201, create_res.text
+    quote_id = create_res.json()["id"]
+
+    submit_res = client.post(
+        f"/api/v1/quotes/{quote_id}/submit",
+        headers=user_auth_headers,
+    )
+    assert submit_res.status_code == 200, submit_res.text
+
+    forbidden_res = client.get(
+        f"/api/v1/quotes/{quote_id}/status-history",
+        headers=other_user_auth_headers,
+    )
+    assert forbidden_res.status_code == 403, forbidden_res.text

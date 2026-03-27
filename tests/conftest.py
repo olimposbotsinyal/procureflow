@@ -1,4 +1,4 @@
-# tests\conftest.py
+# tests/conftest.py
 import os
 import pytest
 from fastapi.testclient import TestClient
@@ -19,7 +19,7 @@ def setup_test_db():
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
 
-    # admin + user seed
+    # admin + user + other_user seed
     db = SessionLocal()
     try:
         admin = db.query(User).filter(User.email == "admin@procureflow.dev").first()
@@ -43,6 +43,17 @@ def setup_test_db():
                 is_active=True,
             )
             db.add(user)
+
+        other = db.query(User).filter(User.email == "other@procureflow.dev").first()
+        if not other:
+            other = User(
+                email="other@procureflow.dev",
+                hashed_password=get_password_hash("Other123!"),
+                full_name="Other User",
+                role="user",
+                is_active=True,
+            )
+            db.add(other)
 
         db.commit()
     finally:
@@ -72,6 +83,15 @@ def admin_auth_headers(client):
 @pytest.fixture(scope="session")
 def user_auth_headers(client):
     payload = {"email": "user@procureflow.dev", "password": "User123!"}
+    r = client.post("/api/v1/auth/login", json=payload)
+    assert r.status_code == 200, r.text
+    token = r.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture(scope="session")
+def other_user_auth_headers(client):
+    payload = {"email": "other@procureflow.dev", "password": "Other123!"}
     r = client.post("/api/v1/auth/login", json=payload)
     assert r.status_code == 200, r.text
     token = r.json()["access_token"]
