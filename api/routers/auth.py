@@ -7,8 +7,13 @@ from api.core.security import create_access_token, verify_password
 from api.core.deps import get_current_user
 from api.db.session import get_db
 from api.models import User
-from api.schemas.auth import TokenPairResponse, TokenRefreshRequest
-from api.services.auth_service import refresh_tokens
+from api.schemas.auth import (
+    TokenPairResponse,
+    TokenRefreshRequest,
+    LogoutRequest,
+    MessageResponse,
+)
+from api.services.auth_service import refresh_tokens, logout_refresh_token
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -46,5 +51,14 @@ def me(current_user: User = Depends(get_current_user)):
 def refresh_token(payload: TokenRefreshRequest, db: Session = Depends(get_db)):
     try:
         return refresh_tokens(db, payload.refresh_token)
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+
+@router.post("/logout", response_model=MessageResponse)
+def logout(payload: LogoutRequest, db: Session = Depends(get_db)):
+    try:
+        logout_refresh_token(db, payload.refresh_token)
+        return {"message": "Logged out successfully"}
     except ValueError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc

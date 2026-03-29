@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
+from api.core.config import REFRESH_TOKEN_EXPIRE_DAYS
 from api.core.security import (
     create_access_token,
     create_refresh_token,
@@ -43,10 +44,12 @@ def refresh_tokens(db: Session, raw_refresh_token: str) -> dict:
         RefreshToken(
             jti=new_jti,
             user_id=user.id,
-            expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+            expires_at=datetime.now(timezone.utc)
+            + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
             revoked_at=None,
         )
     )
+
     db.commit()
 
     new_access = create_access_token(sub=str(user.id), role=role)
@@ -56,3 +59,20 @@ def refresh_tokens(db: Session, raw_refresh_token: str) -> dict:
         "refresh_token": new_refresh,
         "token_type": "bearer",
     }
+
+
+def logout_refresh_token(db: Session, raw_refresh_token: str) -> None:
+    payload = decode_refresh_token(raw_refresh_token)
+    jti = payload["jti"]
+
+    token_row = (
+        db.query(RefreshToken)
+        .filter(RefreshToken.jti == jti, RefreshToken.revoked_at.is_(None))
+        .first()
+    )
+
+    if not token_row:
+        raise ValueError("Refresh token already revoked or not found")
+
+    token_row.revoked_at = datetime.now(timezone.utc)
+    db.commit()

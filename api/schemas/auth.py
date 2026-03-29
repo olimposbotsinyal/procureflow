@@ -1,3 +1,4 @@
+# api\schemas\auth.py
 from pydantic import BaseModel, Field
 
 
@@ -9,3 +10,11 @@ class TokenPairResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+
+
+class LogoutRequest(BaseModel):
+    refresh_token: str
+
+
+class MessageResponse(BaseModel):
+    message: str
