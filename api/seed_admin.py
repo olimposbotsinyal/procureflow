@@ -10,7 +10,8 @@ def seed_other_user() -> None:
         if not other:
             other = User(
                 email="other@procureflow.dev",
-                hashed_password=get_password_hash("change-me"),
+                hashed_password=get_password_hash("Other123!"),
+                full_name="Other User",
                 role="user",
                 is_active=True,
             )

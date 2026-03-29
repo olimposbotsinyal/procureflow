@@ -1,4 +1,4 @@
-# tests/conftest.py
+# tests\conftest.py
 import os
 import pytest
 from fastapi.testclient import TestClient
@@ -19,7 +19,7 @@ def setup_test_db():
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
 
-    # admin + user + other_user seed
+    # admin + user seed
     db = SessionLocal()
     try:
         admin = db.query(User).filter(User.email == "admin@procureflow.dev").first()
@@ -89,6 +89,12 @@ def user_auth_headers(client):
     return {"Authorization": f"Bearer {token}"}
 
 
+# backward compatibility (eski testler kırılmasın)
+@pytest.fixture(scope="session")
+def auth_headers(admin_auth_headers):
+    return admin_auth_headers
+
+
 @pytest.fixture(scope="session")
 def other_user_auth_headers(client):
     payload = {"email": "other@procureflow.dev", "password": "Other123!"}
@@ -96,9 +102,3 @@ def other_user_auth_headers(client):
     assert r.status_code == 200, r.text
     token = r.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
-
-
-# backward compatibility (eski testler kırılmasın)
-@pytest.fixture(scope="session")
-def auth_headers(admin_auth_headers):
-    return admin_auth_headers
