@@ -7,6 +7,7 @@ Hedef, sürdürülebilir, test edilebilir, denetlenebilir ve kurumsal
 seviyede bir backend temelidir.
 
 ---
+
 ## 1) Amaç ve Kapsam
 
 Quote domaini aşağıdaki yetenekleri kapsar:
@@ -203,7 +204,8 @@ Kurallar:
 
 ## 10) API Sözleşme Prensipleri
 
-Kod seviyesinde teknik alan adları İngilizce kalabilir; ürün dili ve dokümantasyon Türkçe olacaktır.
+Kod seviyesinde teknik alan adları İngilizce kalabilir;
+ürün dili ve dokümantasyon Türkçe olacaktır.
 
 Önerilen şema adları:
 
@@ -324,4 +326,3 @@ Audit kapsamı:
 - ERP/harici sistem entegrasyonları
 - Gelişmiş otomasyon kuralları
 - Performans ve ölçek iyileştirmeleri
-
