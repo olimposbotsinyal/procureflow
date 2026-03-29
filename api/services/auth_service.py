@@ -1,30 +1,22 @@
-# api\services\auth_service.py
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from api.core.config import REFRESH_TOKEN_EXPIRE_DAYS
 from api.core.security import (
     create_access_token,
     create_refresh_token,
     decode_refresh_token,
+    hash_jti,
 )
 from api.models.refresh_token import RefreshToken
 from api.models.user import User
-import hashlib
-
-
-def hash_jti(jti: str) -> str:
-    return hashlib.sha256(jti.encode("utf-8")).hexdigest()
 
 
 def refresh_tokens(db: Session, raw_refresh_token: str) -> dict:
     payload = decode_refresh_token(raw_refresh_token)
 
     user_id = int(payload["sub"])
-    role = payload.get("role", "user")
-    old_jti = payload["jti"]
-    old_jti_hash = hash_jti(old_jti)
+    old_jti_hash = hash_jti(payload["jti"])
 
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -35,32 +27,41 @@ def refresh_tokens(db: Session, raw_refresh_token: str) -> dict:
     token_row = (
         db.query(RefreshToken)
         .filter(
-            RefreshToken.jti_hash == old_jti_hash, RefreshToken.revoked_at.is_(None)
+            RefreshToken.jti_hash == old_jti_hash,
+            RefreshToken.revoked_at.is_(None),
         )
         .first()
     )
     if not token_row:
         raise ValueError("Refresh token revoked or not found")
 
-    token_row.revoked_at = datetime.now(timezone.utc)
+    now_utc = datetime.now(timezone.utc)
+    if token_row.expires_at <= now_utc:
+        raise ValueError("Refresh token expired")
 
-    new_refresh = create_refresh_token(sub=str(user.id), role=role)
+    # Eski refresh token'ı rotasyon için revoke et
+    token_row.revoked_at = now_utc
+
+    # Yeni refresh token üret
+    new_refresh = create_refresh_token(sub=str(user.id), role=user.role)
     new_payload = decode_refresh_token(new_refresh)
     new_jti_hash = hash_jti(new_payload["jti"])
+    new_exp_ts = int(new_payload["exp"])
+    new_expires_at = datetime.fromtimestamp(new_exp_ts, tz=timezone.utc)
 
     db.add(
         RefreshToken(
             jti_hash=new_jti_hash,
             user_id=user.id,
-            expires_at=datetime.now(timezone.utc)
-            + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
+            expires_at=new_expires_at,
             revoked_at=None,
         )
     )
 
     db.commit()
 
-    new_access = create_access_token(sub=str(user.id), role=role)
+    # Access token role'u payload'dan değil DB'den gelsin
+    new_access = create_access_token(sub=str(user.id), role=user.role)
 
     return {
         "access_token": new_access,
@@ -71,11 +72,14 @@ def refresh_tokens(db: Session, raw_refresh_token: str) -> dict:
 
 def logout_refresh_token(db: Session, raw_refresh_token: str) -> None:
     payload = decode_refresh_token(raw_refresh_token)
-    jti = payload["jti"]
+    jti_hash_value = hash_jti(payload["jti"])
 
     token_row = (
         db.query(RefreshToken)
-        .filter(RefreshToken.jti == jti, RefreshToken.revoked_at.is_(None))
+        .filter(
+            RefreshToken.jti_hash == jti_hash_value,
+            RefreshToken.revoked_at.is_(None),
+        )
         .first()
     )
 

@@ -1,12 +1,20 @@
 # api\routers\auth.py
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
-from api.core.security import create_access_token, verify_password
 from api.core.deps import get_current_user
+from api.core.security import (
+    create_access_token,
+    create_refresh_token,
+    decode_refresh_token,
+    verify_password,
+    hash_jti,
+)
 from api.db.session import get_db
-from api.models import User
+from api.models import User, RefreshToken
 from api.schemas.auth import (
     TokenPairResponse,
     TokenRefreshRequest,
@@ -24,7 +32,7 @@ class LoginIn(BaseModel):
     password: str
 
 
-@router.post("/login")
+@router.post("/login", response_model=TokenPairResponse)
 def login(data: LoginIn, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == data.email).first()
 
@@ -34,8 +42,30 @@ def login(data: LoginIn, db: Session = Depends(get_db)):
             detail="Invalid credentials",
         )
 
-    token = create_access_token(sub=user.email, role=user.role)
-    return {"access_token": token, "token_type": "bearer"}
+    access_token = create_access_token(sub=str(user.id), role=user.role)
+    refresh_token = create_refresh_token(sub=str(user.id), role=user.role)
+
+    # refresh token içindeki jti + exp bilgilerini al
+    payload = decode_refresh_token(refresh_token)
+    jti_hash_value = hash_jti(payload["jti"])
+    exp_ts = int(payload["exp"])
+    expires_at = datetime.fromtimestamp(exp_ts, tz=timezone.utc)
+
+    db.add(
+        RefreshToken(
+            jti_hash=jti_hash_value,
+            user_id=user.id,
+            expires_at=expires_at,
+            revoked_at=None,
+        )
+    )
+    db.commit()
+
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+    }
 
 
 @router.get("/me")

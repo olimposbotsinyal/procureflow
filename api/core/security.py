@@ -1,6 +1,6 @@
-# core/security.py
 from datetime import datetime, timedelta, timezone
 import os
+import hashlib
 from uuid import uuid4
 
 from jose import jwt, JWTError, ExpiredSignatureError
@@ -71,3 +71,7 @@ def decode_refresh_token(token: str) -> dict:
         raise ValueError("Token jti is missing")
 
     return payload
+
+
+def hash_jti(jti: str) -> str:
+    return hashlib.sha256(jti.encode("utf-8")).hexdigest()
