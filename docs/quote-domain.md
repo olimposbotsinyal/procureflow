@@ -1,7 +1,8 @@
 ﻿# Quote (Teklif) Domain Tasarımı
 
-Bu doküman, teklif (quote) domaininin iş kurallarını, durum akışını, yetkilendirme modelini ve API sözleşme prensiplerini tanımlar.  
-Hedef: sürdürülebilir, test edilebilir ve profesyonel bir backend temeli.
+Bu doküman, teklif (quote) domaininin iş kurallarını, durum akışını, yetkilendirme modelini, raporlama ve sözleşme üretim süreçlerini tanımlar.
+
+Hedef, sürdürülebilir, test edilebilir, denetlenebilir ve kurumsal seviyede bir backend temelidir.
 
 ---
 
@@ -13,22 +14,30 @@ Quote domaini aşağıdaki yetenekleri kapsar:
 - Teklif güncelleme
 - Teklif listeleme (filtre + sayfalama)
 - Teklif detay görüntüleme
-- Durum geçişleri (taslak, gönderildi, onaylandı, reddedildi)
-- (Opsiyonel) yumuşak silme (soft delete)
+- Durum geçişleri (taslak, gönderildi, onaylandı, reddedildi, iptal)
+- Gelişmiş raporlama (Excel + grafik + dışa aktarma)
+- Onaylanan teklif için sözleşme üretimi (PDF / DOCX)
+- Yazdırma kuyruğuna gönderme
+- Tedarikçi bazlı görünürlük ve paylaşım
+- Tek tık iletişim (arama / e-posta)
+- Dosya ekli tekli veya toplu e-posta gönderimi
 
 Kapsam dışı (ilk faz):
-- Çoklu dil desteği
-- İleri seviye raporlama
-- Harici ERP senkronizasyonu
+
+- Çoklu dil desteği (şimdilik öncelik dışı)
+- Harici ERP çift yönlü senkronizasyon (ileri faz)
 
 ---
 
 ## 2) Terimler
 
-- **Teklif (Quote):** Satın alma/tedarik bağlamında oluşturulan teklif kaydı.
-- **Sahip (Owner):** Teklifi oluşturan kullanıcı.
-- **Durum (Status):** Teklifin yaşam döngüsündeki anlık hali.
-- **Yumuşak Silme (Soft Delete):** Kayıt fiziksel silinmeden pasife çekilir.
+- **Teklif (Quote):** Satın alma sürecinde toplanan fiyat/koşul teklifi kaydı.
+- **Tedarikçi (Vendor):** Teklifi sağlayan firma.
+- **Sahip (Owner):** Kaydı oluşturan veya atanan satın alma kullanıcısı.
+- **Durum (Status):** Teklifin yaşam döngüsündeki hali.
+- **Sözleşme (Contract):** Onaylanan tekliften üretilen resmi belge.
+- **Paylaşım (Share):** Bir kaydın seçili kullanıcılara erişim açılması.
+- **RBAC:** Role dayalı erişim kontrol modeli.
 
 ---
 
@@ -40,94 +49,187 @@ Geçerli durumlar:
 - `gonderildi`
 - `onaylandi`
 - `reddedildi`
-- `iptal` (opsiyonel, faz-2)
+- `iptal`
 
 İzinli geçişler:
 
 1. `taslak -> gonderildi`
 2. `gonderildi -> onaylandi`
 3. `gonderildi -> reddedildi`
-4. `taslak -> iptal` (opsiyonel)
-5. `gonderildi -> iptal` (opsiyonel; iş kuralına bağlı)
+4. `taslak -> iptal`
+5. `gonderildi -> iptal`
 
 İzinli olmayan tüm geçişler reddedilir.
 
-Kural:
-- `onaylandi` ve `reddedildi` terminal durumdur (ilk fazda geri dönüş yok).
+Kurallar:
+
+- `onaylandi`, `reddedildi`, `iptal` terminal durumdur.
+- Terminal durumdaki teklif içerik alanları güncellenemez.
+- `onaylandi` durumunda sözleşme üretimi tetiklenebilir.
 
 ---
 
-## 4) Yetkilendirme Matrisi
+## 4) Rol ve Yetki Modeli (RBAC)
 
-Roller (ilk faz):
-- `kullanici`
-- `admin`
+Roller:
 
-| İşlem | kullanici | admin |
-|---|---|---|
-| Teklif oluşturma | Kendi adına evet | Evet |
-| Teklif güncelleme | Sadece kendi teklifi | Evet |
-| Teklif listeleme | Sadece kendi kayıtları | Tüm kayıtlar |
-| Teklif detay | Sadece kendi kayıtları | Tüm kayıtlar |
-| Durum geçişi | Kural dahilinde kendi kaydı | Evet |
+- `super_admin`
+- `satinalma_direktoru`
+- `satinalma_yoneticisi`
+- `satinalma_uzmani`
+- `satinalmaci`
 
-Ek kural:
-- Kullanıcı başka kullanıcıya ait kaydı göremez/güncelleyemez.
+Temel prensipler:
 
----
+- Yetki tanımları yalnızca `super_admin` tarafından yönetilir.
+- Roller endpoint değil, **izin setleri** üzerinden değerlendirilir.
+- Kayıt erişimi rol + sahiplik + paylaşım kombinasyonu ile belirlenir.
 
-## 5) İş Kuralları
-
-### 5.1 Oluşturma
-- Başlık zorunlu
-- Para birimi zorunlu ve whitelist içinde olmalı (örn: TRY, USD, EUR)
-- Son geçerlilik tarihi geçmişte olamaz
-- Kalem listesi boş olamaz (faz-1 tercihi: en az 1 kalem)
-
-### 5.2 Güncelleme
-- `taslak` durumunda alanlar güncellenebilir
-- `gonderildi` durumunda sadece sınırlı alanlar güncellenebilir (örn: not)
-- `onaylandi/reddedildi` durumunda içerik güncellenemez
-- Güncelleme yapan kullanıcı bilgisi iz kaydına yazılır
-
-### 5.3 Listeleme
-- Varsayılan sıralama: `created_at desc`
-- Filtreler:
-  - durum
-  - tarih aralığı
-  - metin arama (başlık/açıklama)
-- Sayfalama zorunlu (page/size)
-
-### 5.4 Silme
-- İlk faz öneri: fiziksel silme yok
-- Soft delete alanı: `silindi_mi`, `silinme_tarihi`
-- Silinen kayıtlar varsayılan listede görünmez
+| Rol | Teklif Görme | Teklif Güncelleme | Durum Geçişi | Rapor Görme | Sözleşme Üretme | Yetki Yönetimi |
+| --- | --- | --- | --- | --- | --- | --- |
+| super_admin | Tümü | Tümü | Tümü | Tümü | Tümü | Evet |
+| satinalma_direktoru | Tümü | Tümü | Evet | Tümü | Evet | Hayır |
+| satinalma_yoneticisi | Ekibi + Paylaşılan | Ekibi + Paylaşılan | Evet | Ekip | Evet | Hayır |
+| satinalma_uzmani | Kendi + Paylaşılan | Kendi + Paylaşılan | Sınırlı | Kendi | Sınırlı | Hayır |
+| satinalmaci | Kendi + Paylaşılan | Kendi + Paylaşılan | Sınırlı | Kendi | Sınırlı | Hayır |
 
 ---
 
-## 6) API Sözleşme Prensipleri (Türkçe)
+## 5) Tedarikçi Görünürlüğü ve Paylaşım Kuralları
 
-Not: Kod seviyesinde alan adları İngilizce kalabilir; açıklamalar ve dokümantasyon Türkçe olacaktır.
+Temel kural:
+
+- Her satın almacı varsayılan olarak yalnızca kendi tedarikçilerini görür.
+
+Paylaşım kuralları:
+
+- Kullanıcı, kaydı seçili kullanıcılara paylaşabilir.
+- Paylaşım türleri: `goruntule`, `duzenle`, `yorum`.
+- Paylaşım kaydı denetlenir (kim, ne zaman, hangi yetkiyle).
+- Paylaşım geri alınabilir.
+- Paylaşımla erişim açılmış olsa bile kritik geçişlerde rol kontrolü devam eder.
+
+---
+
+## 6) Teklif İş Kuralları
+
+### 6.1 Oluşturma
+
+- Başlık zorunlu.
+- Para birimi whitelist içinde olmalıdır (TRY, USD, EUR).
+- Son geçerlilik tarihi geçmişte olamaz.
+- Kalem listesi en az 1 satır içermelidir.
+- Tedarikçi ilişkisi zorunludur.
+
+### 6.2 Güncelleme
+
+- `taslak` durumunda alanlar güncellenebilir.
+- `gonderildi` durumunda yalnızca izinli alanlar güncellenebilir (ör. notlar).
+- Terminal durumda içerik güncellemesi kapalıdır.
+- Her değişiklik audit kaydı üretir.
+
+### 6.3 Listeleme
+
+- Varsayılan sıralama `created_at desc`.
+- Filtreler: durum, tarih aralığı, tedarikçi, kategori, tutar aralığı.
+- Sayfalama zorunludur (`page`, `size` veya cursor).
+
+### 6.4 Silme Politikası
+
+- İlk yaklaşım: soft delete.
+- Alanlar: `silindi_mi`, `silinme_tarihi`, `silen_kullanici_id`.
+- Silinen kayıtlar varsayılan listede gösterilmez.
+
+---
+
+## 7) Raporlama Modülü (Öncelikli)
+
+Raporlama bu projenin kritik bileşenidir.
+
+### 7.1 Rapor Türleri
+
+- Teklif performans raporu
+- Tedarikçi başarı oranı raporu
+- Satın almacı bazlı aktivite raporu
+- Durum geçiş süreleri raporu (SLA odaklı)
+- Onay/red oranı raporu
+- Tasarruf analizi (hedeflenen vs gerçekleşen)
+
+### 7.2 Çıktı Formatları
+
+- Excel (`.xlsx`) ana format
+- Grafik destekli sayfalar (sütun, çizgi, pasta)
+- PDF özet rapor (yönetim sunumu için)
+
+### 7.3 Rapor Özellikleri
+
+- Tarih aralığına göre filtreleme
+- Rol bazlı görünürlük
+- Zamanlanmış rapor (günlük/haftalık/aylık)
+- İndirilebilir ve arşivlenebilir çıktı
+- Rapor oluşturma geçmişi (audit)
+
+---
+
+## 8) Sözleşme Üretimi (Onaylanan Firma)
+
+Süreç:
+
+1. Teklif `onaylandi` durumuna gelir.
+2. Şablon seçilir (standart, kategori bazlı, özel).
+3. Sözleşme verileri tekliften doldurulur.
+4. Çıktı üretilir (`PDF` veya `DOCX`).
+5. İstenirse yazdırma kuyruğuna gönderilir.
+
+Kurallar:
+
+- Sözleşme versiyonlanır (`v1`, `v2`, ...).
+- Üreten kullanıcı ve zaman bilgisi loglanır.
+- Nihai sürüm değiştirilemez, revizyon yeni versiyonla açılır.
+
+---
+
+## 9) İletişim Özellikleri (Mobil Entegrasyon Odaklı)
+
+- Tedarikçi kartından tek tıkla telefon araması.
+- Tekli e-posta gönderimi.
+- Toplu e-posta gönderimi (seçili tedarikçiler).
+- Dosya ekleyebilme (teknik şartname, görsel, PDF vb.).
+- Kullanıcı kendi e-posta hesabı ile gönderim yapar (kişisel SMTP/OAuth kimliği).
+- Gönderim kayıtları denetlenir (kim, kime, ne zaman, konu).
+
+---
+
+## 10) API Sözleşme Prensipleri
+
+Kod seviyesinde teknik alan adları İngilizce kalabilir; ürün dili ve dokümantasyon Türkçe olacaktır.
 
 Önerilen şema adları:
+
 - `QuoteCreate`
 - `QuoteUpdate`
 - `QuoteOut`
 - `QuoteListOut`
+- `QuoteStatus`
+- `ReportRequest`
+- `ReportOut`
+- `ContractGenerateRequest`
+- `ContractOut`
+- `ShareRequest`
+- `CommunicationRequest`
 - `MessageOut`
-- `QuoteStatus` (enum)
+- `ErrorOut`
 
-### 6.1 Standart Yanıt Yapısı
-- Başarılı yanıtlarda veri modeli dönülür
-- Hatalarda standart hata modeli kullanılır:
-  - `kod`
-  - `mesaj`
-  - `detay` (opsiyonel)
-  - `iz_id` (opsiyonel, üretim için önerilir)
+Standart hata modeli:
+
+- `kod`
+- `mesaj`
+- `detay` (opsiyonel)
+- `iz_id` (opsiyonel)
 
 ---
 
-## 7) Hata Kodları ve HTTP Eşlemeleri
+## 11) Hata Kodları ve HTTP Eşlemeleri
 
 - `VALIDATION_ERROR` -> 422
 - `UNAUTHORIZED` -> 401
@@ -135,61 +237,89 @@ Not: Kod seviyesinde alan adları İngilizce kalabilir; açıklamalar ve doküma
 - `NOT_FOUND` -> 404
 - `CONFLICT` -> 409
 - `INVALID_STATUS_TRANSITION` -> 409
+- `ACCESS_SCOPE_VIOLATION` -> 403
+- `REPORT_GENERATION_FAILED` -> 500
+- `CONTRACT_GENERATION_FAILED` -> 500
 - `INTERNAL_ERROR` -> 500
 
-Kural:
-- Domain kaynaklı beklenen hatalar 4xx ile döner.
-- Beklenmeyen hatalar 500 + iz kaydı ile takip edilir.
+---
+
+## 12) Gözlemlenebilirlik ve Denetlenebilirlik
+
+Log alanları:
+
+- `kullanici_id`
+- `rol`
+- `islem_tipi`
+- `entity_id` (quote/report/contract)
+- `sonuc`
+- `iz_id`
+
+Audit kapsamı:
+
+- Durum geçişleri
+- Paylaşım işlemleri
+- Rapor üretimleri
+- Sözleşme üretimleri
+- E-posta gönderimleri
 
 ---
 
-## 8) Gözlemlenebilirlik ve Kayıt (Logging)
+## 13) Güvenlik Gereksinimleri
 
-- Her kritik işlem için bilgi logu:
-  - kullanıcı_id
-  - teklif_id
-  - işlem_tipi
-  - sonuç
-- Hatalarda:
-  - hata kodu
-  - iz_id
-  - teknik detay (güvenli maskeleme ile)
+- Tüm kritik işlemlerde yetki kontrolü zorunludur.
+- Kayıt seviyesinde erişim kontrolü uygulanır (row-level authorization).
+- Dosya eklerinde tip ve boyut doğrulaması yapılır.
+- Hassas alanlar loglarda maskelenir.
+- E-posta kimlik bilgileri şifreli saklanır.
 
 ---
 
-## 9) Test Stratejisi
+## 14) Test Stratejisi
 
-### 9.1 Servis Katmanı Testleri
-- Teklif oluşturma başarılı/başarısız
-- Yetkisiz güncelleme engeli
-- Geçersiz durum geçişi engeli
-- Listeleme filtre ve sayfalama doğruluğu
+### 14.1 Servis Katmanı Testleri
 
-### 9.2 API Testleri
+- Durum geçiş doğrulamaları
+- Rol ve izin kontrolleri
+- Paylaşım kapsamı kontrolleri
+- Rapor üretim filtre doğruluğu
+- Sözleşme üretim kuralları
+
+### 14.2 API Testleri
+
 - Endpoint sözleşme testleri
 - HTTP durum kodu doğrulamaları
-- Hata modeli tutarlılığı
+- Yetkisiz erişim senaryoları
+- Dosya ekli iletişim senaryoları
 
-Hedef:
-- Domain kuralları servis testlerinde korunmalı
-- API testleri entegrasyon davranışını doğrulamalı
+### 14.3 E2E Testler
+
+- Tekliften onaya, onaydan sözleşmeye tam akış
+- Rapor üretim ve indirme akışı
+- Mobil odaklı iletişim akışı
 
 ---
 
-## 10) Faz Planı
+## 15) Faz Planı
 
 ### Faz-1 (hemen)
-- Durum modeli + yetki matrisi
-- create/update/list/get
-- temel test seti
-- Türkçe dokümantasyon
+
+- Temel quote akışları (create/update/list/get)
+- Rol + izin altyapısı (RBAC)
+- Tedarikçi görünürlüğü ve paylaşım
+- Raporlama v1 (Excel + temel grafik)
+- Sözleşme üretim v1 (PDF/DOCX)
+- İletişim v1 (tekli/toplu e-posta + ek)
 
 ### Faz-2
-- iptal durumu
-- soft delete
-- audit alanlarını genişletme
-- performans iyileştirmeleri
+
+- Yazdırma kuyruğu entegrasyonu
+- Zamanlanmış raporlar
+- Gelişmiş dashboard metrikleri
+- Sözleşme şablon yönetimi
 
 ### Faz-3
-- çoklu dil desteği (i18n)
-- gelişmiş raporlama / dış entegrasyonlar
+
+- ERP/harici sistem entegrasyonları
+- Gelişmiş otomasyon kuralları
+- Performans ve ölçek iyileştirmeleri
