@@ -44,6 +44,17 @@ def setup_test_db():
             )
             db.add(user)
 
+        other = db.query(User).filter(User.email == "other@procureflow.dev").first()
+        if not other:
+            other = User(
+                email="other@procureflow.dev",
+                hashed_password=get_password_hash("Other123!"),
+                full_name="Other User",
+                role="user",
+                is_active=True,
+            )
+            db.add(other)
+
         db.commit()
     finally:
         db.close()
