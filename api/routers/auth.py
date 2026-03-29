@@ -7,6 +7,8 @@ from api.core.security import create_access_token, verify_password
 from api.core.deps import get_current_user
 from api.db.session import get_db
 from api.models import User
+from api.schemas.auth import TokenPairResponse, TokenRefreshRequest
+from api.services.auth_service import refresh_tokens
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -38,3 +40,11 @@ def me(current_user: User = Depends(get_current_user)):
         "email": current_user.email,
         "role": current_user.role,
     }
+
+
+@router.post("/refresh", response_model=TokenPairResponse)
+def refresh_token(payload: TokenRefreshRequest, db: Session = Depends(get_db)):
+    try:
+        return refresh_tokens(db, payload.refresh_token)
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
