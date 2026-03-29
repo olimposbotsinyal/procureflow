@@ -1,11 +1,12 @@
 ﻿# Quote (Teklif) Domain Tasarımı
 
-Bu doküman, teklif (quote) domaininin iş kurallarını, durum akışını, yetkilendirme modelini, raporlama ve sözleşme üretim süreçlerini tanımlar.
+Bu doküman, teklif (quote) domain’inin iş kurallarını, durum akışını,
+yetkilendirme modelini, raporlama ve sözleşme üretim süreçlerini tanımlar.
 
-Hedef, sürdürülebilir, test edilebilir, denetlenebilir ve kurumsal seviyede bir backend temelidir.
+Hedef, sürdürülebilir, test edilebilir, denetlenebilir ve kurumsal
+seviyede bir backend temelidir.
 
 ---
-
 ## 1) Amaç ve Kapsam
 
 Quote domaini aşağıdaki yetenekleri kapsar:
@@ -323,3 +324,4 @@ Audit kapsamı:
 - ERP/harici sistem entegrasyonları
 - Gelişmiş otomasyon kuralları
 - Performans ve ölçek iyileştirmeleri
+
