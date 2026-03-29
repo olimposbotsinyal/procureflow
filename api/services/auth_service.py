@@ -11,6 +11,11 @@ from api.core.security import (
 )
 from api.models.refresh_token import RefreshToken
 from api.models.user import User
+import hashlib
+
+
+def hash_jti(jti: str) -> str:
+    return hashlib.sha256(jti.encode("utf-8")).hexdigest()
 
 
 def refresh_tokens(db: Session, raw_refresh_token: str) -> dict:
@@ -19,6 +24,7 @@ def refresh_tokens(db: Session, raw_refresh_token: str) -> dict:
     user_id = int(payload["sub"])
     role = payload.get("role", "user")
     old_jti = payload["jti"]
+    old_jti_hash = hash_jti(old_jti)
 
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -28,7 +34,9 @@ def refresh_tokens(db: Session, raw_refresh_token: str) -> dict:
 
     token_row = (
         db.query(RefreshToken)
-        .filter(RefreshToken.jti == old_jti, RefreshToken.revoked_at.is_(None))
+        .filter(
+            RefreshToken.jti_hash == old_jti_hash, RefreshToken.revoked_at.is_(None)
+        )
         .first()
     )
     if not token_row:
@@ -38,11 +46,11 @@ def refresh_tokens(db: Session, raw_refresh_token: str) -> dict:
 
     new_refresh = create_refresh_token(sub=str(user.id), role=role)
     new_payload = decode_refresh_token(new_refresh)
-    new_jti = new_payload["jti"]
+    new_jti_hash = hash_jti(new_payload["jti"])
 
     db.add(
         RefreshToken(
-            jti=new_jti,
+            jti_hash=new_jti_hash,
             user_id=user.id,
             expires_at=datetime.now(timezone.utc)
             + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
