@@ -3,5 +3,6 @@
   "python.analysis.extraPaths": [
     "D:/Projects/procureflow"
   ],
-  "python.analysis.indexing": true
+  "python.analysis.indexing": true,
+  "json.schemaDownload.enable": false
 }

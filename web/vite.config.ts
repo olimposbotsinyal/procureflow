@@ -1,3 +1,4 @@
+// FILE: web/vite.config.ts
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
@@ -18,10 +19,10 @@ export default defineConfig({
         "src/vite-env.d.ts",
       ],
       thresholds: {
-        lines: 70,
-        functions: 70,
-        branches: 60,
-        statements: 70,
+        lines: 90,
+        functions: 90,
+        branches: 75,
+        statements: 90,
       },
     },
   },
