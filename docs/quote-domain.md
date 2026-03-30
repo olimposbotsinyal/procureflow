@@ -1,10 +1,32 @@
 ﻿# Quote (Teklif) Domain Tasarımı
 
-Bu doküman, teklif (quote) domain’inin iş kurallarını, durum akışını,
+Bu doküman, teklif (quote) domain'inin iş kurallarını, durum akışını,
 yetkilendirme modelini, raporlama ve sözleşme üretim süreçlerini tanımlar.
 
 Hedef, sürdürülebilir, test edilebilir, denetlenebilir ve kurumsal
 seviyede bir backend temelidir.
+
+---
+
+## 🧭 Durum Panosu (Hızlı Takip)
+
+Bu bölüm, projenin nerede olduğunu tek bakışta gösterir.
+
+- ✅ **DONE**: Tamamlandı
+- 🧪 **TESTED**: Test ile doğrulandı
+- 👀 **IN_REVIEW**: Gözden geçirme aşamasında
+- 🛠 **PLANNED**: Planlandı, henüz başlanmadı
+- ⛔ **BLOCKED**: Engelde
+
+|Başlık|Durum|Not|
+|---|---|---|
+|Status transition matrisi (`draft/submitted/approved/rejected`)|✅ DONE + 🧪 TESTED|Domain policy + API ile hizalı|
+|Geçersiz transition HTTP kodu|✅ DONE + 🧪 TESTED|`409 -> 422` güncellendi|
+|Status history testleri|✅ DONE + 🧪 TESTED|Workflow senaryoları geçti|
+|Deprecation uyarısı temizliği (`UNPROCESSABLE_CONTENT`)|🛠 PLANNED|Teknik temizlik|
+|Transition reason/note|🛠 PLANNED|Audit zenginliği|
+|Concurrency guard|🛠 PLANNED|Race condition önleme|
+|Domain event (`quote.status.changed`)|🛠 PLANNED|Genişleme altyapısı|
 
 ---
 
@@ -33,7 +55,8 @@ Kapsam dışı (ilk faz):
 
 ## 2) Terimler
 
-- **Teklif (Quote):** Satın alma sürecinde toplanan fiyat/koşul teklifi kaydı.
+- **Teklif (Quote):** Satın alma sürecinde toplanan fiyat/koşul teklifi
+  kaydı.
 - **Tedarikçi (Vendor):** Teklifi sağlayan firma.
 - **Sahip (Owner):** Kaydı oluşturan veya atanan satın alma kullanıcısı.
 - **Durum (Status):** Teklifin yaşam döngüsündeki hali.
@@ -69,6 +92,13 @@ Kurallar:
 - Terminal durumdaki teklif içerik alanları güncellenemez.
 - `onaylandi` durumunda sözleşme üretimi tetiklenebilir.
 
+### 3.1 Uygulama Durumu
+
+- ✅ DONE + 🧪 TESTED: `draft -> submitted -> approved/rejected` akışı
+  doğrulandı.
+- ✅ DONE + 🧪 TESTED: Geçersiz direkt geçişler engellendi.
+- ✅ DONE + 🧪 TESTED: Geçersiz geçiş HTTP yanıtı `422`.
+
 ---
 
 ## 4) Rol ve Yetki Modeli (RBAC)
@@ -87,13 +117,13 @@ Temel prensipler:
 - Roller endpoint değil, **izin setleri** üzerinden değerlendirilir.
 - Kayıt erişimi rol + sahiplik + paylaşım kombinasyonu ile belirlenir.
 
-| Rol | Teklif Görme | Teklif Güncelleme | Durum Geçişi | Rapor Görme | Sözleşme Üretme | Yetki Yönetimi |
-| --- | --- | --- | --- | --- | --- | --- |
-| super_admin | Tümü | Tümü | Tümü | Tümü | Tümü | Evet |
-| satinalma_direktoru | Tümü | Tümü | Evet | Tümü | Evet | Hayır |
-| satinalma_yoneticisi | Ekibi + Paylaşılan | Ekibi + Paylaşılan | Evet | Ekip | Evet | Hayır |
-| satinalma_uzmani | Kendi + Paylaşılan | Kendi + Paylaşılan | Sınırlı | Kendi | Sınırlı | Hayır |
-| satinalmaci | Kendi + Paylaşılan | Kendi + Paylaşılan | Sınırlı | Kendi | Sınırlı | Hayır |
+|Rol|Teklif Görme|Teklif Güncelleme|Durum Geçişi|Rapor Görme|Sözleşme Üretme|Yetki Yönetimi|
+|---|---|---|---|---|---|---|
+|super_admin|Tümü|Tümü|Tümü|Tümü|Tümü|Evet|
+|satinalma_direktoru|Tümü|Tümü|Evet|Tümü|Evet|Hayır|
+|satinalma_yoneticisi|Ekibi + Paylaşılan|Ekibi + Paylaşılan|Evet|Ekip|Evet|Hayır|
+|satinalma_uzmani|Kendi + Paylaşılan|Kendi + Paylaşılan|Sınırlı|Kendi|Sınırlı|Hayır|
+|satinalmaci|Kendi + Paylaşılan|Kendi + Paylaşılan|Sınırlı|Kendi|Sınırlı|Hayır|
 
 ---
 
@@ -109,7 +139,8 @@ Paylaşım kuralları:
 - Paylaşım türleri: `goruntule`, `duzenle`, `yorum`.
 - Paylaşım kaydı denetlenir (kim, ne zaman, hangi yetkiyle).
 - Paylaşım geri alınabilir.
-- Paylaşımla erişim açılmış olsa bile kritik geçişlerde rol kontrolü devam eder.
+- Paylaşımla erişim açılmış olsa bile kritik geçişlerde rol kontrolü devam
+  eder.
 
 ---
 
@@ -126,7 +157,8 @@ Paylaşım kuralları:
 ### 6.2 Güncelleme
 
 - `taslak` durumunda alanlar güncellenebilir.
-- `gonderildi` durumunda yalnızca izinli alanlar güncellenebilir (ör. notlar).
+- `gonderildi` durumunda yalnızca izinli alanlar güncellenebilir
+  (ör. notlar).
 - Terminal durumda içerik güncellemesi kapalıdır.
 - Her değişiklik audit kaydı üretir.
 
@@ -197,7 +229,8 @@ Kurallar:
 - Tekli e-posta gönderimi.
 - Toplu e-posta gönderimi (seçili tedarikçiler).
 - Dosya ekleyebilme (teknik şartname, görsel, PDF vb.).
-- Kullanıcı kendi e-posta hesabı ile gönderim yapar (kişisel SMTP/OAuth kimliği).
+- Kullanıcı kendi e-posta hesabı ile gönderim yapar
+  (kişisel SMTP/OAuth kimliği).
 - Gönderim kayıtları denetlenir (kim, kime, ne zaman, konu).
 
 ---
@@ -239,11 +272,14 @@ Standart hata modeli:
 - `FORBIDDEN` -> 403
 - `NOT_FOUND` -> 404
 - `CONFLICT` -> 409
-- `INVALID_STATUS_TRANSITION` -> 409
+- `INVALID_STATUS_TRANSITION` -> 422
 - `ACCESS_SCOPE_VIOLATION` -> 403
 - `REPORT_GENERATION_FAILED` -> 500
 - `CONTRACT_GENERATION_FAILED` -> 500
 - `INTERNAL_ERROR` -> 500
+
+> Not: Status transition ihlalleri domain validation hatası olduğu için
+> `422` döner.
 
 ---
 
@@ -301,6 +337,16 @@ Audit kapsamı:
 - Rapor üretim ve indirme akışı
 - Mobil odaklı iletişim akışı
 
+### 14.4 Mevcut Test Durumu
+
+|Test Alanı|Durum|Not|
+|---|---|---|
+|Quote workflow (`submit -> approve`)|✅ DONE + 🧪 TESTED|Başarılı|
+|Invalid direct transition kontrolü|✅ DONE + 🧪 TESTED|Başarılı|
+|Invalid transition HTTP `422`|✅ DONE + 🧪 TESTED|Başarılı|
+|Concurrency/race testleri|🛠 PLANNED|Eklenecek|
+|Event emit testleri|🛠 PLANNED|Eklenecek|
+
 ---
 
 ## 15) Faz Planı
@@ -326,3 +372,25 @@ Audit kapsamı:
 - ERP/harici sistem entegrasyonları
 - Gelişmiş otomasyon kuralları
 - Performans ve ölçek iyileştirmeleri
+
+---
+
+## 🗂 Değişiklik Günlüğü (Kısa)
+
+- ✅ DONE + 🧪 TESTED: Quote status transition davranışı güncellendi.
+- ✅ DONE + 🧪 TESTED: Invalid status transition HTTP kodu `409` yerine
+  `422` yapıldı.
+- ✅ DONE + 🧪 TESTED: Kalite kapıları (`pytest`, `ruff`,
+  `ruff-format`, `mypy`) başarılı.
+
+---
+
+## 📌 Güncelleme Kuralı (Takım Standardı)
+
+Her teknik commit sonrası bu dosyada ilgili satır güncellenir:
+
+1. Durum etiketi (`🛠 -> ✅`)
+2. Test etiketi (`🧪` eklendi mi)
+3. Kısa not (gerekirse commit SHA)
+
+Bu disiplin, projede "neredeyiz?" sorusunu 10 saniyede cevaplar.

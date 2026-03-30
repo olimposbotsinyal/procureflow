@@ -61,7 +61,7 @@ def test_quote_status_workflow_submit_and_approve(client, auth_headers):
     r_reject_after_approved = client.post(
         f"/api/v1/quotes/{qid}/reject", headers=auth_headers
     )
-    assert r_reject_after_approved.status_code == 409
+    assert r_reject_after_approved.status_code == 422
 
 
 def test_quote_status_workflow_invalid_direct_approve(client, auth_headers):
@@ -74,7 +74,7 @@ def test_quote_status_workflow_invalid_direct_approve(client, auth_headers):
     qid = r_create.json()["id"]
 
     r_approve = client.post(f"/api/v1/quotes/{qid}/approve", headers=auth_headers)
-    assert r_approve.status_code == 409
+    assert r_approve.status_code == 422
 
 
 def test_quote_status_workflow_submit_and_reject(client, auth_headers):

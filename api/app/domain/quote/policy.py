@@ -1,4 +1,3 @@
-# api\app\domain\quote\policy.py
 from dataclasses import dataclass
 from typing import Iterable
 
@@ -14,34 +13,18 @@ class TransitionRule:
 
 TRANSITIONS: dict[QuoteStatus, TransitionRule] = {
     QuoteStatus.DRAFT: TransitionRule(
-        allowed_next={QuoteStatus.REVIEW, QuoteStatus.CANCELLED},
+        allowed_next={QuoteStatus.SUBMITTED},
         required_permissions={QuotePermission.QUOTE_TRANSITION},
     ),
-    QuoteStatus.REVIEW: TransitionRule(
-        allowed_next={QuoteStatus.APPROVED, QuoteStatus.REJECTED, QuoteStatus.DRAFT},
+    QuoteStatus.SUBMITTED: TransitionRule(
+        allowed_next={QuoteStatus.APPROVED, QuoteStatus.REJECTED},
         required_permissions={QuotePermission.QUOTE_TRANSITION},
     ),
     QuoteStatus.APPROVED: TransitionRule(
-        allowed_next={QuoteStatus.SENT, QuoteStatus.CANCELLED},
-        required_permissions={QuotePermission.QUOTE_TRANSITION},
-    ),
-    QuoteStatus.REJECTED: TransitionRule(
-        allowed_next={QuoteStatus.DRAFT, QuoteStatus.CANCELLED},
-        required_permissions={QuotePermission.QUOTE_TRANSITION},
-    ),
-    QuoteStatus.SENT: TransitionRule(
-        allowed_next={QuoteStatus.ACCEPTED, QuoteStatus.EXPIRED, QuoteStatus.CANCELLED},
-        required_permissions={QuotePermission.QUOTE_TRANSITION},
-    ),
-    QuoteStatus.ACCEPTED: TransitionRule(
         allowed_next=set(),
         required_permissions=set(),
     ),
-    QuoteStatus.EXPIRED: TransitionRule(
-        allowed_next={QuoteStatus.DRAFT},
-        required_permissions={QuotePermission.QUOTE_TRANSITION},
-    ),
-    QuoteStatus.CANCELLED: TransitionRule(
+    QuoteStatus.REJECTED: TransitionRule(
         allowed_next=set(),
         required_permissions=set(),
     ),
@@ -57,8 +40,9 @@ def can_transition(
     target: QuoteStatus,
     actor_permissions: Iterable[QuotePermission],
 ) -> bool:
+    # aynı state'e geçiş bu modelde invalid
     if current == target:
-        return True
+        return False
 
     rule = TRANSITIONS.get(current)
     if not rule:

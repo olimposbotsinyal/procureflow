@@ -45,7 +45,7 @@ def _ensure_admin(current_user: User) -> None:
 def _ensure_transition(current: str, allowed_from: set[str]) -> None:
     if current not in allowed_from:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Invalid status transition from '{current}'",
         )
 
