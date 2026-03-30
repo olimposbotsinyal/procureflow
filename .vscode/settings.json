@@ -1,6 +1,7 @@
 {
-  "python.defaultInterpreterPath": "D:/Projects/procureflow/api/.venv/Scripts/python.exe",
+  "python.defaultInterpreterPath": "D:/Projects/procureflow/.venv/Scripts/python.exe",
   "python.analysis.extraPaths": [
-    "D:/Projects/procureflow/api"
-  ]
+    "D:/Projects/procureflow"
+  ],
+  "python.analysis.indexing": true
 }

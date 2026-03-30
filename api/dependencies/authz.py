@@ -1,8 +1,7 @@
+# api\dependencies\authz.py
 from fastapi import Depends, HTTPException, status
 from api.models import User
-from api.v1.auth.dependencies import (
-    get_current_user,
-)  # projendeki gerÃ§ek path'e gÃ¶re dÃ¼zelt
+from api.core.deps import get_current_user
 
 
 def require_role(required_role: str):
