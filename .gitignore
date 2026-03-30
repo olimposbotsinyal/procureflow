@@ -23,3 +23,7 @@ api/procureflow.db
 .env
 .env.*
 !.env.example
+
+# Web artifacts
+web/coverage/
+web/.vite/
