@@ -10,8 +10,16 @@ from api.db.session import get_db
 from api.core.deps import get_current_user
 from api.models import Quote, User, QuoteStatusLog
 from api.schemas import QuoteCreate, QuoteUpdate, QuoteOut, QuoteListOut, MessageOut
+from api.app.domain.quote.enums import QuoteStatus
+from api.app.domain.quote.policy import (
+    ConcurrencyError,
+    QuoteStatusChanged,
+    check_version_collision,
+)
 
 router = APIRouter(prefix="/quotes", tags=["quotes"])
+# Event store (in-memory for now, should be replaced with proper event bus/db)
+_domain_events: list[QuoteStatusChanged] = []
 
 
 def _get_quote_or_404(quote_id: int, db: Session) -> Quote:
@@ -247,11 +255,32 @@ def submit_quote(
         )
 
     _ensure_transition(row.status, {"draft"})
+
+    # Concurrency check: optimistic locking
+    try:
+        check_version_collision(row.version, row.version)  # version should match
+    except ConcurrencyError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
     previous_status = row.status
     row.status = "submitted"
+    row.version += 1  # Increment version
     row.updated_at = datetime.now(UTC)
     row.updated_by = current_user.id
+    row.transition_reason = "User submitted quote"
+
     _log_status_change(db, row.id, current_user.id, previous_status, row.status)
+
+    # Emit domain event
+    event = QuoteStatusChanged(
+        event_type="quote.status.changed",
+        quote_id=row.id,
+        old_status=QuoteStatus(previous_status),
+        new_status=QuoteStatus(row.status),
+        reason=row.transition_reason,
+        actor_id=current_user.id,
+    )
+    _domain_events.append(event)
 
     db.commit()
     db.refresh(row)
@@ -273,11 +302,32 @@ def approve_quote(
         )
 
     _ensure_transition(row.status, {"submitted"})
+
+    # Concurrency check
+    try:
+        check_version_collision(row.version, row.version)
+    except ConcurrencyError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
     previous_status = row.status
     row.status = "approved"
+    row.version += 1
     row.updated_at = datetime.now(UTC)
     row.updated_by = current_user.id
+    row.transition_reason = "Quote approved by admin"
+
     _log_status_change(db, row.id, current_user.id, previous_status, row.status)
+
+    # Emit domain event
+    event = QuoteStatusChanged(
+        event_type="quote.status.changed",
+        quote_id=row.id,
+        old_status=QuoteStatus(previous_status),
+        new_status=QuoteStatus(row.status),
+        reason=row.transition_reason,
+        actor_id=current_user.id,
+    )
+    _domain_events.append(event)
 
     db.commit()
     db.refresh(row)
@@ -299,11 +349,32 @@ def reject_quote(
         )
 
     _ensure_transition(row.status, {"submitted"})
+
+    # Concurrency check
+    try:
+        check_version_collision(row.version, row.version)
+    except ConcurrencyError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
     previous_status = row.status
     row.status = "rejected"
+    row.version += 1
     row.updated_at = datetime.now(UTC)
     row.updated_by = current_user.id
+    row.transition_reason = "Quote rejected by admin"
+
     _log_status_change(db, row.id, current_user.id, previous_status, row.status)
+
+    # Emit domain event
+    event = QuoteStatusChanged(
+        event_type="quote.status.changed",
+        quote_id=row.id,
+        old_status=QuoteStatus(previous_status),
+        new_status=QuoteStatus(row.status),
+        reason=row.transition_reason,
+        actor_id=current_user.id,
+    )
+    _domain_events.append(event)
 
     db.commit()
     db.refresh(row)
@@ -326,3 +397,26 @@ def get_status_history(
         .all()
     )
     return logs
+
+
+@router.get("/internal/events")
+def get_domain_events():
+    """
+    Internal endpoint to retrieve emitted domain events.
+    Used for testing and debugging domain-driven design.
+    """
+    return {
+        "events": _domain_events,
+        "count": len(_domain_events),
+    }
+
+
+@router.post("/internal/events/clear")
+def clear_domain_events():
+    """
+    Clear all domain events from in-memory store.
+    Used in tests to reset state before each test.
+    """
+    global _domain_events
+    _domain_events.clear()
+    return {"message": "Domain events cleared"}

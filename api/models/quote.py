@@ -25,6 +25,17 @@ class Quote(Base):
         index=True,
     )
 
+    # Concurrency: Optimistic locking version field
+    version: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=1,
+        server_default=text("1"),
+    )
+
+    # Audit: Reason for last status transition
+    transition_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
