@@ -1,3 +1,4 @@
+// FILE: web/src/test/smoke-ui.test.tsx
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import PageLoader from "../components/PageLoader";

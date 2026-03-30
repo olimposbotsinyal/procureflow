@@ -1,3 +1,4 @@
+// FILE: web/src/services/auth.service.ts
 import axios from "axios";
 import { http } from "../lib/http";
 import type { AuthUser } from "../context/auth-types";

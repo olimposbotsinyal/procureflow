@@ -1,3 +1,4 @@
+// FILE: web/src/test/http-interceptor.test.ts
 import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import MockAdapter from "axios-mock-adapter";
 import { http } from "../lib/http";
