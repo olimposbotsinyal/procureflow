@@ -43,8 +43,8 @@ def login(data: LoginIn, db: Session = Depends(get_db)):
             detail="Invalid credentials",
         )
 
-    access_token = create_access_token(sub=user.email, role=user.role)
-    refresh_token = create_refresh_token(sub=user.email, role=user.role)
+    access_token = create_access_token(sub=str(user.id), role=user.role)
+    refresh_token = create_refresh_token(sub=str(user.id), role=user.role)
 
     # Refresh token'ı DB'ye kaydet
 
