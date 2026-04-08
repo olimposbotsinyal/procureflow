@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine, text
-from api.core.config import (
+from core.config import (
     settings,
-)  # sende farklÄ±ysa: from app.core.config import settings
+)  # sende farklıysa: from app.core.config import settings
 
 
 def main():

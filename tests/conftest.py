@@ -4,7 +4,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 # 1) Test DB
-os.environ["DATABASE_URL"] = "sqlite:///./test.db"
+os.environ["DATABASE_URL"] = os.getenv(
+    "TEST_DATABASE_URL",
+    "postgresql+psycopg://postgres:postgres@localhost:5432/procureflow_test",
+)
 
 # 2) App import (env set edildikten sonra)
 from api.main import app

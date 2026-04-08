@@ -20,3 +20,12 @@ if "@host:" in DATABASE_URL or "user:password" in DATABASE_URL:
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 Base = declarative_base()
+
+
+def get_db():
+    """Dependency: Database session düsür"""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

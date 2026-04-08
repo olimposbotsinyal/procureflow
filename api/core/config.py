@@ -1,8 +1,10 @@
 # api\core\config.py
 from dotenv import load_dotenv
 import os
+from pathlib import Path
 
-load_dotenv()
+BASE_DIR = Path(__file__).resolve().parents[1]
+load_dotenv(BASE_DIR / ".env")
 
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5432")
@@ -13,4 +15,7 @@ REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
 
-DATABASE_URL = f"postgresql+psycopg://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+DATABASE_URL = (
+    os.getenv("DATABASE_URL")
+    or f"postgresql+psycopg://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+)

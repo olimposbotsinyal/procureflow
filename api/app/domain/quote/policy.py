@@ -5,6 +5,7 @@ from datetime import datetime
 
 from .enums import QuoteStatus
 from .permissions import QuotePermission
+from api.core.time import utcnow
 
 
 @dataclass(frozen=True)
@@ -21,7 +22,7 @@ class QuoteDomainEvent:
     event_type: str
     quote_id: int
     actor_id: int | None = None
-    timestamp: datetime = field(default_factory=lambda: datetime.utcnow())
+    timestamp: datetime = field(default_factory=utcnow)
 
 
 @dataclass

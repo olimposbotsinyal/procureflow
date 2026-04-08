@@ -5,13 +5,18 @@ from uuid import uuid4
 
 from jose import jwt, JWTError, ExpiredSignatureError
 from passlib.context import CryptContext
+from passlib.exc import UnknownHashError
 
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret")
 ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "60"))
 REFRESH_EXPIRE_DAYS = int(os.getenv("JWT_REFRESH_EXPIRE_DAYS", "7"))
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Accept legacy bcrypt/sha256_crypt hashes while using pbkdf2_sha256 for new passwords.
+pwd_context = CryptContext(
+    schemes=["pbkdf2_sha256", "bcrypt", "sha256_crypt"],
+    deprecated="auto",
+)
 
 
 def create_access_token(sub: str, role: str) -> str:
@@ -37,7 +42,10 @@ def get_password_hash(password: str) -> str:
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except (UnknownHashError, ValueError, TypeError):
+        return False
 
 
 def create_refresh_token(sub: str, role: str) -> str:

@@ -22,6 +22,7 @@ from api.schemas.auth import (
     TokenPairResponse,
     TokenRefreshRequest,
 )
+from api.services.user_department_service import resolve_effective_department_id
 from api.services.auth_service import hash_jti, logout_refresh_token, refresh_tokens
 
 
@@ -43,6 +44,8 @@ def login(data: LoginIn, db: Session = Depends(get_db)):
             detail="Invalid credentials",
         )
 
+    print(f"[DEBUG] Login: user_id={user.id}, email={user.email}, role={user.role}")
+    effective_department_id = resolve_effective_department_id(db, user)
     access_token = create_access_token(sub=str(user.id), role=user.role)
     refresh_token = create_refresh_token(sub=str(user.id), role=user.role)
 
@@ -65,15 +68,26 @@ def login(data: LoginIn, db: Session = Depends(get_db)):
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "role": user.role,
+            "full_name": user.full_name,
+            "department_id": effective_department_id,
+        },
     }
 
 
 @router.get("/me")
-def me(current_user: User = Depends(get_current_user)):
+def me(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    effective_department_id = resolve_effective_department_id(db, current_user)
+    db.commit()
     return {
         "id": current_user.id,
         "email": current_user.email,
         "role": current_user.role,
+        "full_name": current_user.full_name,
+        "department_id": effective_department_id,
     }
 
 

@@ -2,6 +2,8 @@
 Tests for Quote domain concurrency control and domain events.
 """
 
+import pytest
+
 
 def test_quote_version_increments_on_transition(client, setup_test_db):
     """Verify that version field increments when transitioning"""
