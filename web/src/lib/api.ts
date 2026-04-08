@@ -43,6 +43,7 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
 
   if (res.status === 401) {
     clearAccessToken();
+    sessionStorage.removeItem("pf_user");
     localStorage.removeItem("pf_user");
     window.location.href = "/login";
     throw new Error("Oturum süresi doldu.");

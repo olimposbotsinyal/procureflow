@@ -1,16 +1,36 @@
 // FILE: web/src/services/auth.service.ts
 import axios from "axios";
 import { http } from "../lib/http";
+import { setSupplierAccessToken } from "../lib/session";
+import { clearAccessToken } from "../lib/token";
+import { getRefreshToken } from "../lib/token";
 import type { AuthUser } from "../context/auth-types";
 
 type LoginApiResponse = {
   access_token: string;
+  refresh_token: string;
   token_type: "bearer" | string;
   user?: AuthUser;
 };
 
+type SupplierLoginResponse = {
+  success?: boolean;
+  message?: string;
+  access_token?: string;
+  token_type?: string;
+  supplier_user?: {
+    id: number;
+    name: string;
+    email: string;
+    supplier_id: number;
+    supplier_name: string;
+    email_verified: boolean;
+  };
+};
+
 export type LoginResponse = {
   accessToken: string;
+  refreshToken: string;
   user: AuthUser | null;
 };
 
@@ -19,30 +39,117 @@ export async function loginRequest(email: string, password: string): Promise<Log
     const res = await http.post<LoginApiResponse>("/auth/login", { email, password });
     const data = res.data;
 
-    if (!data?.access_token) {
-      throw new Error("Login yanıtında access_token yok.");
+    if (!data?.access_token || !data?.refresh_token) {
+      throw new Error("Login yanıtında token bilgisi eksik.");
     }
+
+    console.log("[AUTH] Login başarılı, token alındı:", data);
 
     return {
       accessToken: data.access_token,
+      refreshToken: data.refresh_token,
       user: data.user ?? null,
     };
   } catch (error: unknown) {
     if (axios.isAxiosError(error) && error.response?.status === 401) {
       throw new Error("E-posta veya şifre hatalı.");
     }
+    console.error("[AUTH] Login hatası:", error);
     throw new Error("Giriş sırasında bir sorun oluştu.");
+  }
+}
+
+// Tedarikçi giriş
+export async function supplierLoginRequest(email: string, password: string): Promise<string> {
+  try {
+    const res = await http.post<SupplierLoginResponse>("/supplier/login", { email, password });
+    const data = res.data;
+
+    if (!data?.access_token) {
+      throw new Error("Tedarikçi login yanıtında access_token yok.");
+    }
+
+    console.log("[SUPPLIER_AUTH] Login başarılı:", data);
+  // Supplier oturumuna geçerken admin token/cache'i temizle.
+  clearAccessToken();
+  sessionStorage.removeItem("pf_user");
+  localStorage.removeItem("pf_user");
+    setSupplierAccessToken(data.access_token);
+
+    return data.access_token;
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error) && error.response?.status === 401) {
+      throw new Error("E-posta veya şifre hatalı.");
+    }
+    console.error("[SUPPLIER_AUTH] Login hatası:", error);
+    throw new Error("Giriş sırasında bir sorun oluştu.");
+  }
+}
+
+// Tedarikçi kayıt
+export async function supplierRegisterRequest(token: string, password: string): Promise<string> {
+  try {
+    const res = await http.post<SupplierLoginResponse>("/supplier/register", {
+      token,
+      password,
+    });
+    const data = res.data;
+
+    if (!data?.access_token) {
+      throw new Error("Tedarikçi kayıt yanıtında access_token yok.");
+    }
+
+    console.log("[SUPPLIER_AUTH] Kayıt başarılı:", data);
+  // Supplier oturumuna geçerken admin token/cache'i temizle.
+  clearAccessToken();
+  sessionStorage.removeItem("pf_user");
+  localStorage.removeItem("pf_user");
+    setSupplierAccessToken(data.access_token);
+
+    return data.access_token;
+  } catch (error: unknown) {
+    console.error("[SUPPLIER_AUTH] Kayıt hatası:", error);
+    if (axios.isAxiosError(error)) {
+      throw new Error(error.response?.data?.detail || "Kayıt sırasında sorun oluştu.");
+    }
+    throw new Error("Kayıt sırasında bir sorun oluştu.");
   }
 }
 
 export async function meRequest(): Promise<AuthUser> {
   const res = await http.get<AuthUser>("/auth/me");
+  console.log("[AUTH] /me endpoint'den kullanıcı bilgisi alındı:", res.data);
   return res.data;
+}
+
+export type RefreshResponse = {
+  accessToken: string;
+  refreshToken: string;
+};
+
+export async function refreshRequest(refreshToken: string): Promise<RefreshResponse> {
+  const res = await http.post<LoginApiResponse>("/auth/refresh", {
+    refresh_token: refreshToken,
+  });
+
+  if (!res.data?.access_token || !res.data?.refresh_token) {
+    throw new Error("Refresh yanıtında token bilgisi eksik.");
+  }
+
+  return {
+    accessToken: res.data.access_token,
+    refreshToken: res.data.refresh_token,
+  };
 }
 
 export async function logoutRequest(): Promise<void> {
   try {
-    await http.post("/auth/logout");
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) return;
+
+    await http.post("/auth/logout", {
+      refresh_token: refreshToken,
+    });
   } catch {
     // backend logout başarısız olsa da local temizliği AuthProvider yapacak
   }

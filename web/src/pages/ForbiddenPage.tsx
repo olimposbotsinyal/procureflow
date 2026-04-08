@@ -1,12 +1,18 @@
 // FILE: web/src/pages/ForbiddenPage.tsx
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../hooks/useAuth";
+import { getDefaultRouteForRole } from "../auth/routing";
 
 export default function ForbiddenPage() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const deniedFrom =
     (location.state as { deniedFrom?: string } | null)?.deniedFrom ?? "bu sayfa";
+  const fallbackToState =
+    (location.state as { fallbackTo?: string } | null)?.fallbackTo;
+  const fallbackTo = user ? fallbackToState ?? getDefaultRouteForRole(user.role) : "/dashboard";
 
   return (
     <div style={{ maxWidth: 720, margin: "48px auto", padding: 16, fontFamily: "Arial" }}>
@@ -30,7 +36,7 @@ export default function ForbiddenPage() {
         </button>
 
         <Link
-          to="/dashboard"
+          to={fallbackTo}
           style={{
             textDecoration: "none",
             border: "1px solid #d1d5db",
@@ -40,7 +46,7 @@ export default function ForbiddenPage() {
             background: "#fff",
           }}
         >
-          Dashboard'a Git
+          Uygun Sayfaya Git
         </Link>
       </div>
     </div>
