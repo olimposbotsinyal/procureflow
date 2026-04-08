@@ -1,0 +1,293 @@
+import { useState, useEffect } from "react";
+import axios from "axios";
+import { createProject } from "../services/project.service";
+import { getCompanies } from "../services/admin.service";
+import { modalStyles } from "../styles/modalStyles";
+import type { Company } from "../services/admin.service";
+
+interface ProjectCreateModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+export function ProjectCreateModal({ isOpen, onClose, onSuccess }: ProjectCreateModalProps) {
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const [name, setName] = useState("");
+  const [code, setCode] = useState("");
+  const [companyId, setCompanyId] = useState<number | undefined>();
+  const [projectType, setProjectType] = useState<"merkez" | "franchise">("merkez");
+  const [managerName, setManagerName] = useState("");
+  const [managerPhone, setManagerPhone] = useState("");
+  const [managerEmail, setManagerEmail] = useState("");
+  const [address, setAddress] = useState("");
+  const [budget, setBudget] = useState<number | undefined>();
+  const [isActive, setIsActive] = useState(true);
+
+  useEffect(() => {
+    if (isOpen && companies.length === 0) {
+      loadCompanies();
+    }
+  }, [isOpen, companies.length]);
+
+  async function loadCompanies() {
+    try {
+      const data = await getCompanies();
+      setCompanies(data);
+    } catch (err) {
+      setError("Firmalar yüklenemedi: " + String(err));
+    }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    try {
+      if (!name.trim()) throw new Error("Proje adı gerekli");
+      if (!code.trim()) throw new Error("Proje kodu gerekli");
+      if (!companyId) throw new Error("Firma seçimi gerekli");
+
+      await createProject({
+        name,
+        code,
+        company_id: companyId,
+        project_type: projectType,
+        manager_name: managerName || undefined,
+        manager_phone: managerPhone || undefined,
+        address: address || undefined,
+        budget: budget || undefined,
+        is_active: isActive,
+      });
+
+      onSuccess();
+      onClose();
+      resetForm();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Proje oluşturulamadı";
+      setError(errorMessage);
+      // Detaylı error log
+      if (axios.isAxiosError(err)) {
+        console.error("[PROJECT] API Error:", {
+          status: err.response?.status,
+          data: err.response?.data,
+          message: err.message,
+        });
+      } else {
+        console.error("[PROJECT] Error:", err);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function resetForm() {
+    setName("");
+    setCode("");
+    setCompanyId(undefined);
+    setProjectType("merkez");
+    setManagerName("");
+    setManagerPhone("");
+    setManagerEmail("");
+    setAddress("");
+    setBudget(undefined);
+    setIsActive(true);
+    setError("");
+  }
+
+  if (!isOpen) return null;
+
+  return (
+    <div style={modalStyles.backdrop}>
+      <div style={modalStyles.container}>
+        {/* Header */}
+        <div style={modalStyles.header}>
+          <h2 style={modalStyles.title}>➕ Yeni Proje Oluştur</h2>
+          <button onClick={onClose} style={modalStyles.closeButton}>
+            ✕
+          </button>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} style={modalStyles.content}>
+          {/* Error */}
+          {error && <div style={modalStyles.errorMessage}>{error}</div>}
+
+          {/* Row 1: Name & Code */}
+          <div style={modalStyles.grid}>
+            <div>
+              <label style={modalStyles.label}>Proje Adı *</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="örn: Pizza Max Merkez"
+                style={modalStyles.input}
+              />
+            </div>
+            <div>
+              <label style={modalStyles.label}>Proje Kodu *</label>
+              <input
+                type="text"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="örn: PM-001"
+                style={modalStyles.input}
+              />
+            </div>
+          </div>
+
+          {/* Row 2: Company & Type */}
+          <div style={modalStyles.grid}>
+            <div>
+              <label style={modalStyles.label}>Firma *</label>
+              <select
+                value={companyId || ""}
+                onChange={(e) =>
+                  setCompanyId(e.target.value ? parseInt(e.target.value) : undefined)
+                }
+                style={modalStyles.input}
+              >
+                <option value="">Firma seçin...</option>
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={modalStyles.label}>Proje Tipi</label>
+              <select
+                value={projectType}
+                onChange={(e) =>
+                  setProjectType(e.target.value as "merkez" | "franchise")
+                }
+                style={modalStyles.input}
+              >
+                <option value="merkez">🏢 Merkez</option>
+                <option value="franchise">🍕 Franchise</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Row 3: Manager & Phone */}
+          <div style={modalStyles.grid}>
+            <div>
+              <label style={modalStyles.label}>Proje Yetkilisi</label>
+              <input
+                type="text"
+                value={managerName}
+                onChange={(e) => setManagerName(e.target.value)}
+                placeholder="Ad Soyad"
+                style={modalStyles.input}
+              />
+            </div>
+            <div>
+              <label style={modalStyles.label}>Telefon</label>
+              <input
+                type="tel"
+                value={managerPhone}
+                onChange={(e) => setManagerPhone(e.target.value)}
+                placeholder="+90 555 123 4567"
+                style={modalStyles.input}
+              />
+            </div>
+          </div>
+
+          {/* Row 3b: Manager Email */}
+          <div style={modalStyles.fullWidth}>
+            <label style={modalStyles.label}>Yetkili E-mail</label>
+            <input
+              type="email"
+              value={managerEmail}
+              onChange={(e) => setManagerEmail(e.target.value)}
+              placeholder="yetkili@example.com"
+              style={modalStyles.input}
+            />
+          </div>
+
+          {/* Address */}
+          <div style={modalStyles.fullWidth}>
+            <label style={modalStyles.label}>Adres</label>
+            <textarea
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="Proje adresi..."
+              rows={2}
+              style={modalStyles.textarea}
+            />
+            {address && (
+              <div
+                style={{
+                  width: "100%",
+                  height: "200px",
+                  borderRadius: "8px",
+                  overflow: "hidden",
+                  border: "1px solid #ddd",
+                  marginTop: "8px",
+                }}
+              >
+                <iframe
+                  width="100%"
+                  height="100%"
+                  style={{ border: 0 }}
+                  loading="lazy"
+                  allowFullScreen
+                  src={`https://www.google.com/maps/embed/v1/place?key=AIzaSyBaXW3jHmQX3Q6K5Z9Y0L2M0N1O2P3Q4R&q=${encodeURIComponent(address)}`}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Budget */}
+          <div style={modalStyles.fullWidth}>
+            <label style={modalStyles.label}>Bütçe (TL)</label>
+            <input
+              type="number"
+              value={budget || ""}
+              onChange={(e) =>
+                setBudget(e.target.value ? parseFloat(e.target.value) : undefined)
+              }
+              placeholder="0.00"
+              step="0.01"
+              min="0"
+              style={modalStyles.input}
+            />
+          </div>
+
+          {/* Checkbox */}
+          <div style={{ ...modalStyles.fullWidth, marginBottom: "16px" }}>
+            <label style={modalStyles.checkboxLabel}>
+              <input
+                type="checkbox"
+                checked={isActive}
+                onChange={(e) => setIsActive(e.target.checked)}
+                style={modalStyles.checkbox}
+              />
+              <span>Projeyi aktif olarak oluştur</span>
+            </label>
+          </div>
+
+          {/* Buttons */}
+          <div style={modalStyles.footer}>
+            <button
+              type="submit"
+              disabled={loading}
+              style={loading ? modalStyles.primaryButtonDisabled : modalStyles.primaryButton}
+            >
+              {loading ? "⏳ Kaydediliyor..." : "✅ Proje Oluştur"}
+            </button>
+            <button type="button" onClick={onClose} style={modalStyles.secondaryButton}>
+              ❌ İptal
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}

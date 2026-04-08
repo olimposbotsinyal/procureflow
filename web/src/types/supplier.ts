@@ -1,0 +1,73 @@
+// web/src/types/supplier.ts
+
+export interface Supplier {
+  id: number;
+  created_by_id: number;
+  company_name: string;
+  logo_url?: string;
+  company_title?: string;
+  tax_number?: string;
+  registration_number?: string;
+  phone: string;
+  email: string;
+  website?: string;
+  address?: string;
+  city?: string;
+  postal_code?: string;
+  invoice_name?: string;
+  invoice_address?: string;
+  invoice_city?: string;
+  invoice_postal_code?: string;
+  reference_score: number;
+  notes?: string;
+  category?: string;
+  is_active: boolean;
+  is_verified: boolean;
+  created_at: string;
+  updated_at?: string;
+  users?: SupplierUser[];
+  quotes?: any[];
+}
+
+export interface SupplierUser {
+  id: number;
+  supplier_id: number;
+  name: string;
+  email: string;
+  phone?: string;
+  is_active: boolean;
+  email_verified: boolean;
+  password_set: boolean;
+  is_default?: boolean;
+  magic_token?: string;
+  magic_token_expires?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface SupplierQuote {
+  id: number;
+  quote_id: number;
+  supplier_id: number;
+  supplier_user_id?: number;
+  status: string;
+  total_amount: number;
+  discount_percent?: number;
+  discount_amount?: number;
+  final_amount: number;
+  payment_terms?: string;
+  delivery_time?: number;
+  warranty?: string;
+  submitted_at?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface SupplierQuoteItem {
+  id: number;
+  supplier_quote_id: number;
+  quote_item_id: number;
+  unit_price: number;
+  total_price: number;
+  notes?: string;
+}
