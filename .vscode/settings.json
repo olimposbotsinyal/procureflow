@@ -4,5 +4,23 @@
     "D:/Projects/procureflow"
   ],
   "python.analysis.indexing": true,
-  "json.schemaDownload.enable": false
+  "json.schemaDownload.enable": false,
+  "chat.tools.terminal.autoApprove": {
+    "/^git add \\.; git commit -m \"fix: tüm değişiklikler tekrar yüklendi, push zorlandı\"; git push --force$/": {
+      "approve": true,
+      "matchCommandLine": true
+    },
+    "/^alembic -c api/alembic\\.ini upgrade head$/": {
+      "approve": true,
+      "matchCommandLine": true
+    },
+    "/^alembic -c api/alembic\\.ini heads$/": {
+      "approve": true,
+      "matchCommandLine": true
+    },
+    "/^alembic -c api/alembic\\.ini merge 25b2def06025 fix_status_enum_cleanup -m \"merge: status enum cleanup ile diğer migration birleşti\"$/": {
+      "approve": true,
+      "matchCommandLine": true
+    }
+  }
 }
