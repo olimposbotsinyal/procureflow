@@ -1,3 +1,13 @@
+# Uploaded/runtime files
+uploads/
+api/uploads/
+
+# Databases and backup artifacts (DEV ONLY)
+backups/
+
+# Temporary import sheets under api root
+api/*.csv
+api/*.xlsx
 
 # virtualenv
 .venv/
@@ -27,3 +37,28 @@ api/procureflow.db
 # Web artifacts
 web/coverage/
 web/.vite/
+
+# Accidental Node artifacts under Python API folder
+api/node_modules/
+api/node_modules-all-files.txt
+api/node_modules-new-files.txt
+
+# Temporary root-level diagnostics and restore artifacts
+/api_debug.log
+/history_restore_plan.txt
+/history_restore_result.txt
+/token.txt
+/check_*.py
+/create_*.py
+/debug_*.py
+/decode_jwt.py
+/final_test.py
+/find_admin.py
+/fix_*.py
+/init_db.py
+/inspect_users_table.py
+/load_*.py
+/seed_test_user.py
+/test_*.py
+/settings.json
+/settings_default.json

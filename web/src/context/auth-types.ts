@@ -5,6 +5,8 @@ export type AuthUser = {
   id: number;
   email: string;
   role: Role;
+  full_name?: string;
+  department_id?: number | null;
 };
 
 export type AuthContextType = {

@@ -4,6 +4,8 @@ import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
 import ForbiddenPage from "../pages/ForbiddenPage"
+import { AuthContext } from "../context/auth-context"
+import type { AuthContextType } from "../context/auth-context"
 
 const mockNavigate = vi.fn()
 
@@ -16,11 +18,20 @@ vi.mock("react-router-dom", async () => {
 })
 
 describe("ForbiddenPage", () => {
+  const authValue: AuthContextType = {
+    user: { id: 1, email: "user@example.com", role: "user" },
+    loading: false,
+    login: async () => {},
+    logout: () => {},
+  }
+
   it("sayfayı render eder", () => {
     render(
-      <MemoryRouter>
-        <ForbiddenPage />
-      </MemoryRouter>,
+      <AuthContext.Provider value={authValue}>
+        <MemoryRouter>
+          <ForbiddenPage />
+        </MemoryRouter>
+      </AuthContext.Provider>,
     )
     expect(screen.getByText(/yetkiniz yok|forbidden|403/i)).toBeInTheDocument()
   })
@@ -28,9 +39,11 @@ describe("ForbiddenPage", () => {
   it("geri dön aksiyonu navigate çağırır", async () => {
     const user = userEvent.setup()
     render(
-      <MemoryRouter>
-        <ForbiddenPage />
-      </MemoryRouter>,
+      <AuthContext.Provider value={authValue}>
+        <MemoryRouter>
+          <ForbiddenPage />
+        </MemoryRouter>
+      </AuthContext.Provider>,
     )
 
     const btn = screen.getByRole("button")

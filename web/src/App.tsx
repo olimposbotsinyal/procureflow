@@ -7,23 +7,63 @@ import AppLayout from "./components/AppLayout";
 import SmartFallbackRedirect from "./routes/SmartFallbackRedirect";
 
 import LoginPage from "./pages/LoginPage";
+import SupplierLoginPage from "./pages/SupplierLoginPage";
+import SupplierRegisterPage from "./pages/SupplierRegisterPage";
+import SupplierDashboard from "./pages/SupplierDashboard";
 import DashboardPage from "./pages/DashboardPage";
 import AdminPage from "./pages/AdminPage";
 import ReportsPage from "./pages/ReportsPage";
 import ForbiddenPage from "./pages/ForbiddenPage";
+import SupplierProfilePage from "./pages/SupplierProfilePage";
+import SupplierFinancePage from "./pages/SupplierFinancePage";
+import SupplierWorkspacePage from "./pages/SupplierWorkspacePage";
+import SupplierEmailChangeConfirmPage from "./pages/SupplierEmailChangeConfirmPage";
+import AdminSupplierDetailPage from "./pages/AdminSupplierDetailPage";
+import AdminSupplierFinancePage from "./pages/AdminSupplierFinancePage";
+import AdminSupplierWorkspacePage from "./pages/AdminSupplierWorkspacePage";
+import AdminQuoteManagementPage from "./pages/AdminQuoteManagementPage";
+import PersonnelDetailPage from "./pages/PersonnelDetailPage";
+import DepartmentDetailPage from "./pages/DepartmentDetailPage";
+import CompanyDetailPage from "./pages/CompanyDetailPage";
+import ProjectDetailPage from "./pages/ProjectDetailPage";
+import ProjectFilesPage from "./pages/ProjectFilesPage";
+import QuoteListPage from "./pages/QuoteListPage";
+import QuoteCreatePage from "./pages/QuoteCreatePage";
+import QuoteDetailPage from "./pages/QuoteDetailPage";
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/supplier/login" element={<SupplierLoginPage />} />
+      <Route path="/supplier/register" element={<SupplierRegisterPage />} />
+      <Route path="/supplier/dashboard" element={<SupplierDashboard />} />
+      <Route path="/supplier/profile" element={<SupplierProfilePage />} />
+      <Route path="/supplier/finance" element={<SupplierFinancePage />} />
+      <Route path="/supplier/workspace" element={<SupplierWorkspacePage />} />
+      <Route path="/supplier/portal" element={<Navigate to="/supplier/workspace?tab=offers" replace />} />
+      <Route path="/supplier/email-change-confirm" element={<SupplierEmailChangeConfirmPage />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/quotes" element={<QuoteListPage />} />
+          <Route path="/quotes/create" element={<QuoteCreatePage />} />
+          <Route path="/quotes/:id" element={<QuoteDetailPage />} />
+          <Route path="/quotes/:id/edit" element={<QuoteDetailPage />} />
           <Route path="/403" element={<ForbiddenPage />} />
 
           <Route element={<RequirePermission permission="view:admin" />}>
             <Route path="/admin" element={<AdminPage />} />
+            <Route path="/admin/quotes" element={<AdminQuoteManagementPage />} />
+            <Route path="/admin/personnel/:id" element={<PersonnelDetailPage />} />
+            <Route path="/admin/departments/:id" element={<DepartmentDetailPage />} />
+            <Route path="/admin/companies/:id" element={<CompanyDetailPage />} />
+            <Route path="/admin/projects/:id" element={<ProjectDetailPage />} />
+            <Route path="/admin/project-files/:projectId" element={<ProjectFilesPage />} />
+            <Route path="/admin/suppliers/:id" element={<AdminSupplierDetailPage />} />
+            <Route path="/admin/suppliers/:id/finance" element={<AdminSupplierFinancePage />} />
+            <Route path="/admin/suppliers/:id/workspace" element={<AdminSupplierWorkspacePage />} />
           </Route>
 
           <Route element={<RequirePermission permission="view:reports" />}>

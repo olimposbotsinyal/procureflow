@@ -72,10 +72,11 @@ def refresh_tokens(db: Session, raw_refresh_token: str) -> dict:
 def logout_refresh_token(db: Session, raw_refresh_token: str) -> None:
     payload = decode_refresh_token(raw_refresh_token)
     jti = payload["jti"]
+    jti_hash = hash_jti(jti)
 
     token_row = (
         db.query(RefreshToken)
-        .filter(RefreshToken.jti == jti, RefreshToken.revoked_at.is_(None))
+        .filter(RefreshToken.jti_hash == jti_hash, RefreshToken.revoked_at.is_(None))
         .first()
     )
 

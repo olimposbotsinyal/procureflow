@@ -1,5 +1,5 @@
 // FILE: web\src\auth\permissions.ts
-export type Role = "admin" | "user" | "manager" | "buyer";
+export type Role = "admin" | "user" | "manager" | "buyer" | "super_admin";
 
 export type Permission =
   | "view:dashboard"
@@ -8,6 +8,7 @@ export type Permission =
   | "manage:users";
 
 const rolePermissions: Record<Role, Permission[]> = {
+  super_admin: ["view:dashboard", "view:admin", "view:reports", "manage:users"],
   admin: ["view:dashboard", "view:admin", "view:reports", "manage:users"],
   manager: ["view:dashboard", "view:reports"],
   buyer: ["view:dashboard"],

@@ -24,6 +24,7 @@ describe("auth.service", () => {
     mockedPost.mockResolvedValueOnce({
       data: {
         access_token: "acc-123",
+        refresh_token: "ref-123",
         token_type: "bearer",
         user: { id: 1, email: "test@x.com", role: "admin" },
       },
@@ -37,6 +38,7 @@ describe("auth.service", () => {
     })
     expect(result).toEqual({
       accessToken: "acc-123",
+      refreshToken: "ref-123",
       user: { id: 1, email: "test@x.com", role: "admin" },
     })
   })
@@ -75,9 +77,12 @@ describe("auth.service", () => {
   })
 
   it("logoutRequest: /auth/logout çağırır (hata olsa bile throw etmez)", async () => {
+    sessionStorage.setItem("refresh_token", "refresh-xyz")
     mockedPost.mockRejectedValueOnce(new Error("network"))
 
     await expect(logoutRequest()).resolves.toBeUndefined()
-    expect(http.post).toHaveBeenCalledWith("/auth/logout")
+    expect(http.post).toHaveBeenCalledWith("/auth/logout", {
+      refresh_token: "refresh-xyz",
+    })
   })
 })

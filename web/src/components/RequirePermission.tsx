@@ -1,6 +1,7 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { hasPermission, type Permission } from "../auth/permissions";
+import { getDefaultRouteForRole } from "../auth/routing";
 
 type Props = {
   permission: Permission;
@@ -24,7 +25,16 @@ export default function RequirePermission({
 
   const ok = hasPermission(user.role, permission);
   if (!ok) {
-    return <Navigate to={redirectTo} replace state={{ deniedFrom: location.pathname }} />;
+    return (
+      <Navigate
+        to={redirectTo}
+        replace
+        state={{
+          deniedFrom: location.pathname,
+          fallbackTo: getDefaultRouteForRole(user.role),
+        }}
+      />
+    );
   }
 
   return <Outlet />;

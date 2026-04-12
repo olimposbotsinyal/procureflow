@@ -63,6 +63,7 @@ describe("AppLayout", () => {
       </MemoryRouter>,
     )
 
+    await user.click(screen.getByRole("button", { name: /admin@pf.com/i }))
     await user.click(screen.getByRole("button", { name: /çıkış yap/i }))
 
     expect(mockLogout).toHaveBeenCalledTimes(1)
