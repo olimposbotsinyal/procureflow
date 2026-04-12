@@ -7,7 +7,7 @@ from enum import Enum
 from pydantic import BaseModel
 
 from api.database import get_db
-from api.models import Quote, QuoteApproval, User, Role
+from api.models import Quote, QuoteApproval, User
 from api.core.deps import get_current_user
 from api.schemas.quote import QuoteApprovalCreate, QuoteApprovalOut
 from api.services.email_service import get_email_service
@@ -144,8 +144,7 @@ def request_approvals(
         # Email gönder - Yöneticilere
         yonetici_users = (
             db.query(User)
-            .join(User.role_obj)
-            .filter(User.role_obj.has(Role.name == "Yönetici"))
+            .filter(User.role == "satinalma_yoneticisi")
             .all()
         )
 
@@ -221,7 +220,7 @@ def approve_quote(
         raise HTTPException(status_code=404, detail="Teklif bulunamadı")
 
     # Kullanıcının rolü belirle
-    user_role = current_user.role_obj.name if current_user.role_obj else None
+    user_role = current_user.role
 
     # Beklemede olan onay bul
     pending_approval = (
@@ -268,8 +267,7 @@ def approve_quote(
             if next_approval.required_role == "Direktör":
                 direktor_users = (
                     db.query(User)
-                    .join(User.role_obj)
-                    .filter(User.role_obj.has(Role.name == "Direktör"))
+                    .filter(User.role == "satinalma_direktoru")
                     .all()
                 )
 
@@ -338,7 +336,7 @@ def reject_quote(
         raise HTTPException(status_code=404, detail="Teklif bulunamadı")
 
     # Kullanıcının rolü
-    user_role = current_user.role_obj.name if current_user.role_obj else None
+    user_role = current_user.role
 
     # Beklemede olan onay bul
     pending_approval = (

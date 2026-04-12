@@ -376,7 +376,7 @@ def submit_quote(
         raise HTTPException(status_code=409, detail=str(e))
 
     previous_status = row.status
-    row.status = "sent"
+    row.status = "submitted"
     row.version += 1  # Increment version
     row.updated_at = datetime.now(UTC)
     row.updated_by = current_user.id
@@ -515,7 +515,52 @@ def get_status_history(
         .order_by(QuoteStatusLog.id.asc())
         .all()
     )
-    return logs
+    return [
+        {
+            "id": log.id,
+            "from_status": log.from_status,
+            "to_status": log.to_status,
+            "changed_by_id": log.changed_by_id,
+            "created_at": log.created_at,
+        }
+        for log in logs
+    ]
+
+
+@router.get("/{quote_id}/full-audit-trail")
+def get_full_audit_trail(
+    quote_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Teklifin tam audit trail'ini döner (status log + approval events)."""
+    row = _get_quote_or_404(quote_id, db)
+    _ensure_owner_or_admin(current_user, row)
+
+    logs = (
+        db.query(QuoteStatusLog)
+        .filter(QuoteStatusLog.quote_id == quote_id)
+        .order_by(QuoteStatusLog.id.asc())
+        .all()
+    )
+
+    timeline = [
+        {
+            "event_type": "status_change",
+            "from_status": log.from_status,
+            "to_status": log.to_status,
+            "changed_by_id": log.changed_by_id,
+            "created_at": log.created_at,
+        }
+        for log in logs
+    ]
+
+    return {
+        "quote_id": quote_id,
+        "quote_title": row.title,
+        "total_events": len(timeline),
+        "timeline": timeline,
+    }
 
 
 # ============================================================================
