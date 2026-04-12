@@ -21,6 +21,11 @@ if TYPE_CHECKING:
 
 
 class User(Base):
+        quotes_created: Mapped[list["Quote"]] = relationship(
+            "Quote",
+            back_populates="created_by",
+            foreign_keys="Quote.created_by_id",
+        )
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
