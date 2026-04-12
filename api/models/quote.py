@@ -45,7 +45,7 @@ class Quote(Base):
     )
     created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     created_by = relationship(
-        "User", back_populates="quotes_created", foreign_keys=[created_by_id]
+        "User", backref="quotes_created", foreign_keys=[created_by_id]
     )
 
     # Teklif Bilgileri
