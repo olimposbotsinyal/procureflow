@@ -55,9 +55,7 @@ class User(Base):
     )
     # Quotes created by this user
     quotes_created: Mapped[list["Quote"]] = relationship(
-        "Quote",
-        back_populates="created_by",
-        foreign_keys="Quote.created_by_id",
+        "Quote", back_populates="created_by"
     )
     # Company-Role assignments (which roles in which companies)
     company_roles: Mapped[list["CompanyRole"]] = relationship(
