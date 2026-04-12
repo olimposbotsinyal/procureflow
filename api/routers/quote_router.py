@@ -436,8 +436,24 @@ def send_quote_to_supplier(
             status_code=400, detail="Gönderim için teklifte en az bir kalem olmalıdır"
         )
 
+    # Bekleyen onay varsa gönderimi engelle
+    pending_approval = (
+        db.query(QuoteApproval)
+        .filter(
+            QuoteApproval.quote_id == quote_id,
+            QuoteApproval.status == "beklemede",
+        )
+        .first()
+    )
+    if pending_approval:
+        raise HTTPException(
+            status_code=409,
+            detail="Teklif onayı beklemektedir. Onay tamamlanmadan tedarikçilere gönderilemez.",
+        )
+
     try:
-        created_count = 0
+        created_supplier_ids: list[int] = []
+        skipped_supplier_ids: list[int] = []
 
         for supplier_id in supplier_ids:
             supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
@@ -454,6 +470,7 @@ def send_quote_to_supplier(
                 .first()
             )
             if existing_supplier_quote:
+                skipped_supplier_ids.append(supplier_id)
                 continue
 
             supplier_quote = SupplierQuote(
@@ -479,7 +496,7 @@ def send_quote_to_supplier(
                     )
                 )
 
-            created_count += 1
+            created_supplier_ids.append(supplier_id)
 
         quote.status = QuoteStatus.SENT
         quote.sent_at = utcnow()
@@ -516,8 +533,10 @@ def send_quote_to_supplier(
 
         return {
             "status": "success",
-            "message": f"Teklif {created_count} tedarikçiye gönderilmiştir",
+            "message": f"Teklif {len(created_supplier_ids)} tedarikçiye gönderilebilir",
             "deadline": quote.deadline,
+            "created_supplier_ids": created_supplier_ids,
+            "skipped_supplier_ids": skipped_supplier_ids,
         }
     except HTTPException:
         raise

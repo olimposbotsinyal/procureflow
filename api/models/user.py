@@ -1,23 +1,21 @@
-# models\user.py
 from typing import TYPE_CHECKING
-
-from sqlalchemy import String, Boolean, ForeignKey, Integer, and_
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-from api.database import Base
-from api.models.associations import (
-    user_company,
-    user_department,
-    user_managers,
-    user_company_roles,
-    user_project_permissions,
-)
 
 if TYPE_CHECKING:
     from api.models.department import Department
     from api.models.company import Company
     from api.models.project import Project
     from api.models.assignment import CompanyRole, ProjectPermission
+# models\user.py
+
+
+from sqlalchemy import String, Boolean, ForeignKey, Integer
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from api.database import Base
+from api.models.associations import (
+    user_company,
+    user_department,
+)
 
 
 class User(Base):

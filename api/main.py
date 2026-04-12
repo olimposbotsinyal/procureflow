@@ -1,7 +1,6 @@
 # api\main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pathlib import Path
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
@@ -22,7 +21,6 @@ from api.routers.settings_router import router as settings_router
 from api.routers.user_profile_router import router as user_profile_router
 from api.routers.advanced_settings_router import router as advanced_settings_router
 from api.database import Base, engine, SessionLocal
-from api import models  # Import models to register them with Base
 from api.models import User, Permission, Role
 from api.core.security import get_password_hash
 
@@ -32,8 +30,15 @@ load_dotenv()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
+    print("[STARTUP] 🚀 Initializing ProcureFlow Backend...")
+
     # Create all tables if they don't exist
-    Base.metadata.create_all(bind=engine)
+    try:
+        Base.metadata.create_all(bind=engine)
+        print("[STARTUP] ✅ Database tables created/verified")
+    except Exception as e:
+        print(f"[STARTUP] ❌ Error creating tables: {e}")
+        raise
 
     # Çalışma zamanı sütun migrasyonu (mevcut DB için)
     from sqlalchemy import text as _text
@@ -54,12 +59,15 @@ async def lifespan(app: FastAPI):
                 _mig_db.commit()
             except Exception:
                 _mig_db.rollback()  # sütun zaten varsa sessizce geç
+        print("[STARTUP] ✅ Runtime migrations completed")
+    except Exception as e:
+        print(f"[STARTUP] ⚠️ Migration error: {e}")
     finally:
         _mig_db.close()
 
     db = SessionLocal()
     try:
-        # Create test user if not exists
+        # Create test user if not exists (local development support)
         admin = db.query(User).filter(User.email == "test@example.com").first()
         if not admin:
             admin = User(
@@ -72,9 +80,9 @@ async def lifespan(app: FastAPI):
             db.add(admin)
             db.flush()  # Anında veritabanına yaz
             db.commit()
-            print("[OK] ✅ Test user created: test@example.com / Test1234!")
+            print("[STARTUP] ✅ Test user created: test@example.com / Test1234!")
         else:
-            print("[OK] ℹ️ Test user already exists: test@example.com")
+            print("[STARTUP] ℹ️ Test user already exists: test@example.com")
 
         # Create role hierarchy if not exists
         roles_data = [

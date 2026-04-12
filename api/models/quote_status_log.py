@@ -16,6 +16,9 @@ class QuoteStatusLog(Base):
     changed_by: Mapped[int] = mapped_column(
         ForeignKey("users.id"), nullable=False, index=True
     )
+    @property
+    def changed_by_id(self) -> int:
+        return self.changed_by
     from_status: Mapped[str] = mapped_column(String(20), nullable=False)
     to_status: Mapped[str] = mapped_column(String(20), nullable=False)
     created_at: Mapped[datetime] = mapped_column(

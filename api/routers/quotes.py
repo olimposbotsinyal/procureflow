@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 from api.db.session import get_db
 from api.core.deps import get_current_user
 from api.models import Quote, User, QuoteStatusLog
-from api.models.quote import QuoteStatus, QuoteItem
+from api.models.quote import QuoteItem
+from api.app.domain.quote.enums import QuoteStatus, parse_quote_status
 from api.models.supplier import SupplierQuote, Supplier, SupplierUser
 from api.schemas import QuoteCreate, QuoteUpdate, QuoteOut, QuoteListOut, MessageOut
 from api.schemas.quote import QuoteItemCreate
@@ -95,10 +96,9 @@ def list_quotes(
     q: str | None = Query(None, description="Title contains"),
     min_amount: float | None = Query(None, ge=0),
     max_amount: float | None = Query(None, ge=0),
-    status_filter: Literal[
-        "draft", "sent", "pending", "responded", "approved", "rejected"
-    ]
-    | None = Query(None),
+    status_filter: Literal["draft", "submitted", "approved", "rejected"] | None = Query(
+        None
+    ),
     sort_by: Literal["created_at", "total_amount", "id"] = Query("created_at"),
     sort_order: Literal["asc", "desc"] = Query("desc"),
     include_deleted: bool = Query(False),
@@ -178,14 +178,18 @@ def create_quote(
         company_contact_phone=payload.company_contact_phone,
         company_contact_email=payload.company_contact_email,
         status=QuoteStatus.DRAFT,
-        created_by=current_user.id,
         department_id=effective_department_id,
         assigned_to_id=effective_assigned_to_id,
     )
     db.add(row)
     db.commit()
     db.refresh(row)
-    return row
+
+    row_dict = row.__dict__.copy()
+    row_dict["status"] = str(parse_quote_status(str(row.status)))
+    if hasattr(row, "items"):
+        row_dict["items"] = list(row.items)
+    return row_dict
 
 
 @router.get("/{quote_id}", response_model=QuoteOut)
@@ -203,7 +207,15 @@ def get_quote(
             detail="Quote not found",
         )
 
-    return row
+    # Statüyü normalize ederek döndür
+    from api.app.domain.quote.enums import parse_quote_status
+
+    row_dict = row.__dict__.copy()
+    row_dict["status"] = str(parse_quote_status(str(row.status)))
+    # SQLAlchemy instance'ı dict'e dönüştürdüğümüz için items gibi ilişkileri ekle
+    if hasattr(row, "items"):
+        row_dict["items"] = list(row.items)
+    return row_dict
 
 
 @router.put("/{quote_id}", response_model=QuoteOut)
@@ -242,7 +254,13 @@ def update_quote(
 
     db.commit()
     db.refresh(row)
-    return row
+    from api.app.domain.quote.enums import parse_quote_status
+
+    row_dict = row.__dict__.copy()
+    row_dict["status"] = str(parse_quote_status(str(row.status)))
+    if hasattr(row, "items"):
+        row_dict["items"] = list(row.items)
+    return row_dict
 
 
 @router.put("/{quote_id}/items", response_model=QuoteOut)
@@ -306,7 +324,13 @@ def replace_quote_items(
     row.updated_by = current_user.id
     db.commit()
     db.refresh(row)
-    return row
+    from api.app.domain.quote.enums import parse_quote_status
+
+    row_dict = row.__dict__.copy()
+    row_dict["status"] = str(parse_quote_status(str(row.status)))
+    if hasattr(row, "items"):
+        row_dict["items"] = list(row.items)
+    return row_dict
 
 
 @router.delete("/{quote_id}", response_model=MessageOut)
@@ -350,7 +374,12 @@ def restore_quote(
 
     db.commit()
     db.refresh(row)
-    return row
+
+    row_dict = row.__dict__.copy()
+    row_dict["status"] = str(parse_quote_status(str(row.status)))
+    if hasattr(row, "items"):
+        row_dict["items"] = list(row.items)
+    return row_dict
 
 
 @router.post("/{quote_id}/submit", response_model=QuoteOut)
@@ -376,7 +405,7 @@ def submit_quote(
         raise HTTPException(status_code=409, detail=str(e))
 
     previous_status = row.status
-    row.status = "sent"
+    row.status = "submitted"
     row.version += 1  # Increment version
     row.updated_at = datetime.now(UTC)
     row.updated_by = current_user.id
@@ -388,8 +417,8 @@ def submit_quote(
     event = QuoteStatusChanged(
         event_type="quote.status.changed",
         quote_id=row.id,
-        old_status=QuoteStatus(previous_status),
-        new_status=QuoteStatus(row.status),
+        old_status=parse_quote_status(str(previous_status)),
+        new_status=parse_quote_status(str(row.status)),
         reason=row.transition_reason,
         actor_id=current_user.id,
     )
@@ -397,7 +426,12 @@ def submit_quote(
 
     db.commit()
     db.refresh(row)
-    return row
+
+    row_dict = row.__dict__.copy()
+    row_dict["status"] = str(parse_quote_status(str(row.status)))
+    if hasattr(row, "items"):
+        row_dict["items"] = list(row.items)
+    return row_dict
 
 
 @router.post("/{quote_id}/approve", response_model=QuoteOut)
@@ -414,7 +448,7 @@ def approve_quote(
             status_code=409, detail="Cannot change status of a deleted quote"
         )
 
-    _ensure_transition(row.status, {"sent", "submitted"})
+    _ensure_transition(row.status, {"submitted"})
 
     # Concurrency check
     try:
@@ -435,8 +469,8 @@ def approve_quote(
     event = QuoteStatusChanged(
         event_type="quote.status.changed",
         quote_id=row.id,
-        old_status=QuoteStatus(previous_status),
-        new_status=QuoteStatus(row.status),
+        old_status=parse_quote_status(str(previous_status)),
+        new_status=parse_quote_status(str(row.status)),
         reason=row.transition_reason,
         actor_id=current_user.id,
     )
@@ -444,7 +478,12 @@ def approve_quote(
 
     db.commit()
     db.refresh(row)
-    return row
+
+    row_dict = row.__dict__.copy()
+    row_dict["status"] = str(parse_quote_status(str(row.status)))
+    if hasattr(row, "items"):
+        row_dict["items"] = list(row.items)
+    return row_dict
 
 
 @router.post("/{quote_id}/reject", response_model=QuoteOut)
@@ -461,7 +500,7 @@ def reject_quote(
             status_code=409, detail="Cannot change status of a deleted quote"
         )
 
-    _ensure_transition(row.status, {"sent", "submitted"})
+    _ensure_transition(row.status, {"submitted"})
 
     # Concurrency check
     try:
@@ -488,8 +527,8 @@ def reject_quote(
     event = QuoteStatusChanged(
         event_type="quote.status.changed",
         quote_id=row.id,
-        old_status=QuoteStatus(previous_status),
-        new_status=QuoteStatus(row.status),
+        old_status=parse_quote_status(str(previous_status)),
+        new_status=parse_quote_status(str(row.status)),
         reason=row.transition_reason,
         actor_id=current_user.id,
     )
@@ -497,7 +536,12 @@ def reject_quote(
 
     db.commit()
     db.refresh(row)
-    return row
+
+    row_dict = row.__dict__.copy()
+    row_dict["status"] = str(parse_quote_status(str(row.status)))
+    if hasattr(row, "items"):
+        row_dict["items"] = list(row.items)
+    return row_dict
 
 
 @router.get("/{quote_id}/status-history")
@@ -515,7 +559,52 @@ def get_status_history(
         .order_by(QuoteStatusLog.id.asc())
         .all()
     )
-    return logs
+    return [
+        {
+            "id": log.id,
+            "from_status": log.from_status,
+            "to_status": log.to_status,
+            "changed_by_id": log.changed_by_id,
+            "created_at": log.created_at,
+        }
+        for log in logs
+    ]
+
+
+@router.get("/{quote_id}/full-audit-trail")
+def get_full_audit_trail(
+    quote_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Teklifin tam audit trail'ini döner (status log + approval events)."""
+    row = _get_quote_or_404(quote_id, db)
+    _ensure_owner_or_admin(current_user, row)
+
+    logs = (
+        db.query(QuoteStatusLog)
+        .filter(QuoteStatusLog.quote_id == quote_id)
+        .order_by(QuoteStatusLog.id.asc())
+        .all()
+    )
+
+    timeline = [
+        {
+            "event_type": "status_change",
+            "from_status": log.from_status,
+            "to_status": log.to_status,
+            "changed_by_id": log.changed_by_id,
+            "created_at": log.created_at,
+        }
+        for log in logs
+    ]
+
+    return {
+        "quote_id": quote_id,
+        "quote_title": row.title,
+        "total_events": len(timeline),
+        "timeline": timeline,
+    }
 
 
 # ============================================================================
@@ -532,7 +621,6 @@ def get_suppliers_with_quotes(
     """
     Bir teklif için tedarikçi bazında gruplandırılmış teklifler getir
 
-    Response:
     [
         {
             "supplier_id": 1,
@@ -601,7 +689,7 @@ def request_quote_revision(
                     db.query(SupplierUser)
                     .filter(
                         SupplierUser.supplier_id == sq.supplier_id,
-                        SupplierUser.is_active == True,
+                        SupplierUser.is_active,
                     )
                     .all()
                 )
@@ -643,9 +731,13 @@ def submit_revised_quote(
     if not row:
         raise HTTPException(status_code=404, detail="Quote not found")
 
+    supplier_quote_id: int = payload.get("supplier_quote_id")  # type: ignore
+    if supplier_quote_id is None:
+        raise HTTPException(status_code=400, detail="supplier_quote_id zorunlu")
+    supplier_quote_id = int(supplier_quote_id)
     result = QuoteService.submit_revised_quote(
         db,
-        payload.get("supplier_quote_id"),
+        supplier_quote_id,
         payload.get("revised_prices", []),
         current_user.id,
     )
