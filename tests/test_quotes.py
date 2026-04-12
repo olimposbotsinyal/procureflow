@@ -10,6 +10,11 @@ def _quote_payload(title: str, amount: float, project_id: int = 1):
     }
 
 
+def _pick_status(entry: dict, prefix: str) -> str:
+    # Supports both enriched payload (*_status_en) and raw log payload (*_status)
+    return entry.get(f"{prefix}_status_en") or entry.get(f"{prefix}_status") or ""
+
+
 def test_quotes_requires_auth(client):
     r = client.get("/api/v1/quotes/")
     assert r.status_code in (401, 403)
@@ -164,10 +169,10 @@ def test_status_history_owner_can_view_and_sequence_is_correct(
     logs = history_res.json()
 
     assert len(logs) == 2
-    assert logs[0]["from_status_en"] == "draft"
-    assert logs[0]["to_status_en"] in ("submitted", "sent")
-    assert logs[1]["from_status_en"] in ("submitted", "sent")
-    assert logs[1]["to_status_en"] == "approved"
+    assert _pick_status(logs[0], "from") == "draft"
+    assert _pick_status(logs[0], "to") in ("submitted", "sent")
+    assert _pick_status(logs[1], "from") in ("submitted", "sent")
+    assert _pick_status(logs[1], "to") == "approved"
 
 
 def test_status_history_non_owner_non_admin_cannot_view(
