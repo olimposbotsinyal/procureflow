@@ -185,7 +185,13 @@ def create_quote(
     db.add(row)
     db.commit()
     db.refresh(row)
-    return row
+    from api.app.domain.quote.enums import parse_quote_status
+
+    row_dict = row.__dict__.copy()
+    row_dict["status"] = str(parse_quote_status(str(row.status)))
+    if hasattr(row, "items"):
+        row_dict["items"] = list(row.items)
+    return row_dict
 
 
 @router.get("/{quote_id}", response_model=QuoteOut)
@@ -250,7 +256,13 @@ def update_quote(
 
     db.commit()
     db.refresh(row)
-    return row
+    from api.app.domain.quote.enums import parse_quote_status
+
+    row_dict = row.__dict__.copy()
+    row_dict["status"] = str(parse_quote_status(str(row.status)))
+    if hasattr(row, "items"):
+        row_dict["items"] = list(row.items)
+    return row_dict
 
 
 @router.put("/{quote_id}/items", response_model=QuoteOut)
@@ -314,7 +326,13 @@ def replace_quote_items(
     row.updated_by = current_user.id
     db.commit()
     db.refresh(row)
-    return row
+    from api.app.domain.quote.enums import parse_quote_status
+
+    row_dict = row.__dict__.copy()
+    row_dict["status"] = str(parse_quote_status(str(row.status)))
+    if hasattr(row, "items"):
+        row_dict["items"] = list(row.items)
+    return row_dict
 
 
 @router.delete("/{quote_id}", response_model=MessageOut)
@@ -358,7 +376,13 @@ def restore_quote(
 
     db.commit()
     db.refresh(row)
-    return row
+    from api.app.domain.quote.enums import parse_quote_status
+
+    row_dict = row.__dict__.copy()
+    row_dict["status"] = str(parse_quote_status(str(row.status)))
+    if hasattr(row, "items"):
+        row_dict["items"] = list(row.items)
+    return row_dict
 
 
 @router.post("/{quote_id}/submit", response_model=QuoteOut)
@@ -405,7 +429,12 @@ def submit_quote(
 
     db.commit()
     db.refresh(row)
-    return row
+
+    row_dict = row.__dict__.copy()
+    row_dict["status"] = str(parse_quote_status(str(row.status)))
+    if hasattr(row, "items"):
+        row_dict["items"] = list(row.items)
+    return row_dict
 
 
 @router.post("/{quote_id}/approve", response_model=QuoteOut)
@@ -452,7 +481,12 @@ def approve_quote(
 
     db.commit()
     db.refresh(row)
-    return row
+
+    row_dict = row.__dict__.copy()
+    row_dict["status"] = str(parse_quote_status(str(row.status)))
+    if hasattr(row, "items"):
+        row_dict["items"] = list(row.items)
+    return row_dict
 
 
 @router.post("/{quote_id}/reject", response_model=QuoteOut)
@@ -505,7 +539,12 @@ def reject_quote(
 
     db.commit()
     db.refresh(row)
-    return row
+
+    row_dict = row.__dict__.copy()
+    row_dict["status"] = str(parse_quote_status(str(row.status)))
+    if hasattr(row, "items"):
+        row_dict["items"] = list(row.items)
+    return row_dict
 
 
 @router.get("/{quote_id}/status-history")
@@ -585,7 +624,6 @@ def get_suppliers_with_quotes(
     """
     Bir teklif için tedarikçi bazında gruplandırılmış teklifler getir
 
-    Response:
     [
         {
             "supplier_id": 1,
@@ -696,10 +734,10 @@ def submit_revised_quote(
     if not row:
         raise HTTPException(status_code=404, detail="Quote not found")
 
-        supplier_quote_id: int = payload.get("supplier_quote_id")  # type: ignore
-        if supplier_quote_id is None:
-            raise HTTPException(status_code=400, detail="supplier_quote_id zorunlu")
-        supplier_quote_id = int(supplier_quote_id)
+    supplier_quote_id: int = payload.get("supplier_quote_id")  # type: ignore
+    if supplier_quote_id is None:
+        raise HTTPException(status_code=400, detail="supplier_quote_id zorunlu")
+    supplier_quote_id = int(supplier_quote_id)
     result = QuoteService.submit_revised_quote(
         db,
         supplier_quote_id,
