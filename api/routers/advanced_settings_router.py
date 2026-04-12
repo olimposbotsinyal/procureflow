@@ -1,7 +1,6 @@
 # FILE: /api/routers/advanced_settings_router.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
 import secrets
 import smtplib
 from smtplib import SMTPAuthenticationError, SMTPException, SMTPServerDisconnected
@@ -192,7 +191,7 @@ async def test_email_settings(
     settings = _get_or_create_settings(db, EmailSettings)
 
     try:
-        print(f"[EMAIL] Test email gönderiliyor...")
+        print("[EMAIL] Test email gönderiliyor...")
         print(f"[EMAIL] SMTP Host: {settings.smtp_host}:{settings.smtp_port}")
         print(f"[EMAIL] Username: {settings.smtp_username}")
         print(f"[EMAIL] TLS: {settings.use_tls}, SSL: {settings.use_ssl}")
@@ -228,24 +227,25 @@ async def test_email_settings(
         msg.attach(MIMEText(body_html, "html", "utf-8"))
 
         # Send email
-        print(f"[EMAIL] SMTP bağlantısı kuruluyor...")
+        print("[EMAIL] SMTP bağlantısı kuruluyor...")
+        server: smtplib.SMTP
         if settings.use_ssl:
             server = smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port)
         else:
             server = smtplib.SMTP(settings.smtp_host, settings.smtp_port)
             if settings.use_tls:
-                print(f"[EMAIL] TLS başlatılıyor...")
+                print("[EMAIL] TLS başlatılıyor...")
                 server.starttls()
 
         if settings.smtp_username and settings.smtp_password:
-            print(f"[EMAIL] Login yapılıyor...")
+            print("[EMAIL] Login yapılıyor...")
             server.login(settings.smtp_username, settings.smtp_password)
-            print(f"[EMAIL] Login başarılı")
+            print("[EMAIL] Login başarılı")
 
-        print(f"[EMAIL] Email gönderiliyor...")
+        print("[EMAIL] Email gönderiliyor...")
         server.send_message(msg)
         server.quit()
-        print(f"[EMAIL] Email başarıyla gönderildi")
+        print("[EMAIL] Email başarıyla gönderildi")
 
         return {
             "success": True,
