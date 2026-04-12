@@ -96,10 +96,9 @@ def list_quotes(
     q: str | None = Query(None, description="Title contains"),
     min_amount: float | None = Query(None, ge=0),
     max_amount: float | None = Query(None, ge=0),
-    status_filter: Literal[
-        "draft", "sent", "pending", "responded", "approved", "rejected"
-    ]
-    | None = Query(None),
+    status_filter: Literal["draft", "submitted", "approved", "rejected"] | None = Query(
+        None
+    ),
     sort_by: Literal["created_at", "total_amount", "id"] = Query("created_at"),
     sort_order: Literal["asc", "desc"] = Query("desc"),
     include_deleted: bool = Query(False),
@@ -449,7 +448,7 @@ def approve_quote(
             status_code=409, detail="Cannot change status of a deleted quote"
         )
 
-    _ensure_transition(row.status, {"sent", "submitted"})
+    _ensure_transition(row.status, {"submitted"})
 
     # Concurrency check
     try:
@@ -501,7 +500,7 @@ def reject_quote(
             status_code=409, detail="Cannot change status of a deleted quote"
         )
 
-    _ensure_transition(row.status, {"sent", "submitted"})
+    _ensure_transition(row.status, {"submitted"})
 
     # Concurrency check
     try:
