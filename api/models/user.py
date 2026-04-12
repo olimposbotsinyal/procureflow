@@ -16,12 +16,11 @@ if TYPE_CHECKING:
     from api.models.company import Company
     from api.models.project import Project
     from api.models.assignment import CompanyRole, ProjectPermission
+    from api.models.quote import Quote
 
 
 class User(Base):
     __tablename__ = "users"
-
-    # ...yukarıda zaten tanımlı, tekrar eden alanlar kaldırıldı...
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     email: Mapped[str] = mapped_column(
@@ -53,6 +52,12 @@ class User(Base):
     )
     projects: Mapped[list["Project"]] = relationship(
         secondary="user_projects", back_populates="personnel"
+    )
+    # Quotes created by this user
+    quotes_created: Mapped[list["Quote"]] = relationship(
+        "Quote",
+        back_populates="created_by",
+        foreign_keys="Quote.created_by_id",
     )
     # Company-Role assignments (which roles in which companies)
     company_roles: Mapped[list["CompanyRole"]] = relationship(

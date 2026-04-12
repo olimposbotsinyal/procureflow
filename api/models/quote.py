@@ -20,7 +20,6 @@ from api.database import Base
 
 if TYPE_CHECKING:
     from api.models.project import Project
-    from api.models.user import User
     from api.models.supplier import SupplierQuote, SupplierQuoteItem
     from api.models.quote_approval import QuoteApproval
 
@@ -113,7 +112,7 @@ class Quote(Base):
 
     # İlişkiler
     project: Mapped["Project"] = relationship("Project", back_populates="quotes")
-    created_by_user: Mapped["User"] = relationship("User", foreign_keys=[created_by_id])
+    # created_by_user ilişkisi kaldırıldı, sadece created_by kullanılacak
     items: Mapped[list["QuoteItem"]] = relationship(
         "QuoteItem", back_populates="quote", cascade="all, delete-orphan"
     )
