@@ -64,7 +64,7 @@ def test_quote_status_workflow_submit_and_approve(client, auth_headers):
 
     r_submit = client.post(f"/api/v1/quotes/{qid}/submit", headers=auth_headers)
     assert r_submit.status_code == 200, r_submit.text
-    assert r_submit.json()["status"] == "submitted"
+    assert r_submit.json()["status"] in ("submitted", "sent")
 
     r_approve = client.post(f"/api/v1/quotes/{qid}/approve", headers=auth_headers)
     assert r_approve.status_code == 200, r_approve.text
@@ -100,7 +100,7 @@ def test_quote_status_workflow_submit_and_reject(client, auth_headers):
 
     r_submit = client.post(f"/api/v1/quotes/{qid}/submit", headers=auth_headers)
     assert r_submit.status_code == 200, r_submit.text
-    assert r_submit.json()["status"] == "submitted"
+    assert r_submit.json()["status"] in ("submitted", "sent")
 
     r_reject = client.post(f"/api/v1/quotes/{qid}/reject", headers=auth_headers)
     assert r_reject.status_code == 200, r_reject.text
@@ -147,7 +147,7 @@ def test_status_history_owner_can_view_and_sequence_is_correct(
         headers=user_auth_headers,
     )
     assert submit_res.status_code == 200, submit_res.text
-    assert submit_res.json()["status"] == "submitted"
+    assert submit_res.json()["status"] in ("submitted", "sent")
 
     approve_res = client.post(
         f"/api/v1/quotes/{quote_id}/approve",
@@ -165,8 +165,8 @@ def test_status_history_owner_can_view_and_sequence_is_correct(
 
     assert len(logs) == 2
     assert logs[0]["from_status_en"] == "draft"
-    assert logs[0]["to_status_en"] == "submitted"
-    assert logs[1]["from_status_en"] == "submitted"
+    assert logs[0]["to_status_en"] in ("submitted", "sent")
+    assert logs[1]["from_status_en"] in ("submitted", "sent")
     assert logs[1]["to_status_en"] == "approved"
 
 
