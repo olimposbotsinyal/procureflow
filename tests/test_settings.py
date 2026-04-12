@@ -2,13 +2,11 @@
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
 
 from api.main import app
 from api.database import Base, get_db, engine
 from api.models import User, SystemSettings
 from api.core.security import get_password_hash
-from tests.conftest import override_get_db
 
 
 # Test client
