@@ -47,16 +47,16 @@ describe("SmartFallbackRedirect", () => {
     expect(await screen.findByText("Login Page")).toBeInTheDocument();
   });
 
-  it("admin kullanıcıyı /admin'e yönlendirir", async () => {
+  it("admin kullanıcıyı varsayılan rota olan /dashboard'a yönlendirir", async () => {
     renderWithAuth(
       <Routes>
         <Route path="/" element={<SmartFallbackRedirect />} />
-        <Route path="/admin" element={<div>Admin Page</div>} />
+        <Route path="/dashboard" element={<div>Dashboard Page</div>} />
       </Routes>,
       { route: "/", user: { id: 1, email: "admin@test.com", role: "admin" }, loading: false }
     );
 
-    expect(await screen.findByText("Admin Page")).toBeInTheDocument();
+    expect(await screen.findByText("Dashboard Page")).toBeInTheDocument();
   });
 
   it("manager kullanıcıyı mevcut davranışta /dashboard'a yönlendirir", async () => {
