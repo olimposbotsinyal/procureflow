@@ -45,7 +45,9 @@ class Quote(Base):
         ForeignKey("projects.id"), nullable=False, index=True
     )
     created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-    created_by = relationship("User", back_populates="quotes_created", foreign_keys=[created_by_id])
+    created_by = relationship(
+        "User", back_populates="quotes_created", foreign_keys=[created_by_id]
+    )
 
     # Teklif Bilgileri
     title: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -96,8 +98,7 @@ class Quote(Base):
         DateTime(timezone=True), nullable=True
     )
 
-    created_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    updated_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # updated_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
     deleted_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Atama

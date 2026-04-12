@@ -1,16 +1,14 @@
 # models\user.py
+
 from typing import TYPE_CHECKING
 
-from sqlalchemy import String, Boolean, ForeignKey, Integer, and_
+from sqlalchemy import String, Boolean, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.database import Base
 from api.models.associations import (
     user_company,
     user_department,
-    user_managers,
-    user_company_roles,
-    user_project_permissions,
 )
 
 if TYPE_CHECKING:
@@ -21,12 +19,9 @@ if TYPE_CHECKING:
 
 
 class User(Base):
-        quotes_created: Mapped[list["Quote"]] = relationship(
-            "Quote",
-            back_populates="created_by",
-            foreign_keys="Quote.created_by_id",
-        )
     __tablename__ = "users"
+
+    # ...yukarıda zaten tanımlı, tekrar eden alanlar kaldırıldı...
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     email: Mapped[str] = mapped_column(
