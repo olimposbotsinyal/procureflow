@@ -203,7 +203,15 @@ def get_quote(
             detail="Quote not found",
         )
 
-    return row
+    # Statüyü normalize ederek döndür
+    from api.app.domain.quote.enums import parse_quote_status
+
+    row_dict = row.__dict__.copy()
+    row_dict["status"] = str(parse_quote_status(str(row.status)))
+    # SQLAlchemy instance'ı dict'e dönüştürdüğümüz için items gibi ilişkileri ekle
+    if hasattr(row, "items"):
+        row_dict["items"] = list(row.items)
+    return row_dict
 
 
 @router.put("/{quote_id}", response_model=QuoteOut)
