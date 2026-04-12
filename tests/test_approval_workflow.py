@@ -60,7 +60,9 @@ def test_intermediate_approval_keeps_quote_submitted(
         f"/api/v1/quotes/{quote_id}", headers=admin_auth_headers
     )
     assert quote_response.status_code == 200, quote_response.text
-    assert quote_response.json()["status"] == "submitted"
+    assert (
+        quote_response.json()["status"] == "submitted"
+    )  # Ara onayda submitted kalmalı
 
 
 def test_final_approval_and_reject_follow_domain_transitions(
@@ -92,7 +94,9 @@ def test_final_approval_and_reject_follow_domain_transitions(
         f"/api/v1/quotes/{approved_quote_id}", headers=admin_auth_headers
     )
     assert approved_quote_response.status_code == 200, approved_quote_response.text
-    assert approved_quote_response.json()["status"] == "submitted"
+    assert (
+        approved_quote_response.json()["status"] == "approved"
+    )  # Final onaydan sonra approved olmalı
 
     create_response = client.post(
         "/api/v1/quotes/",
