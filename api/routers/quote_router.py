@@ -4,8 +4,6 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from io import BytesIO
-import openpyxl
-import pandas as pd
 from decimal import Decimal
 
 from api.database import get_db
@@ -279,6 +277,14 @@ def import_quote_from_excel(
         raise HTTPException(status_code=422, detail="Kullaniciya departman atanmamis")
 
     try:
+        try:
+            import openpyxl
+        except ModuleNotFoundError:
+            raise HTTPException(
+                status_code=500,
+                detail="Excel import ozelligi icin openpyxl paketi gerekli",
+            )
+
         # Excel dosyasını oku
         excel_data = file.file.read()
         wb = openpyxl.load_workbook(BytesIO(excel_data))
