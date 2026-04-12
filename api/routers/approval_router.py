@@ -261,7 +261,7 @@ def approve_quote(
 
         if next_approval:
             # Sonraki seviyeye git
-            quote.status = "PENDING"  # Hala beklemede
+            quote.status = "pending"  # Hala beklemede
 
             # Email gönder - Sonraki seviye onaylayana
             if next_approval.required_role == "Direktör":
@@ -284,7 +284,7 @@ def approve_quote(
                         )
         else:
             # Tüm onaylar tamamlandı
-            quote.status = "APPROVED"
+            quote.status = "approved"
 
             # Email gönder - Teklifin onaylandı bilgisi
             if quote.created_by.email:
@@ -380,7 +380,7 @@ def reject_quote(
                 other.status = "iptal"
 
         # Quote'u reddet
-        quote.status = "REJECTED"
+        quote.status = "rejected"
 
         # Email gönder - Oluşturucuya
         if quote.created_by.email:
