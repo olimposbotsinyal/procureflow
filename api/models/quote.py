@@ -26,10 +26,7 @@ if TYPE_CHECKING:
 
 class QuoteStatus(str, enum.Enum):
     DRAFT = "draft"
-    SENT = "sent"
     SUBMITTED = "submitted"
-    PENDING = "pending"
-    RESPONDED = "responded"
     APPROVED = "approved"
     REJECTED = "rejected"
 

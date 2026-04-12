@@ -185,7 +185,6 @@ def create_quote(
     db.add(row)
     db.commit()
     db.refresh(row)
-    from api.app.domain.quote.enums import parse_quote_status
 
     row_dict = row.__dict__.copy()
     row_dict["status"] = str(parse_quote_status(str(row.status)))
@@ -376,7 +375,6 @@ def restore_quote(
 
     db.commit()
     db.refresh(row)
-    from api.app.domain.quote.enums import parse_quote_status
 
     row_dict = row.__dict__.copy()
     row_dict["status"] = str(parse_quote_status(str(row.status)))
