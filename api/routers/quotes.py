@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 from api.db.session import get_db
 from api.core.deps import get_current_user
 from api.models import Quote, User, QuoteStatusLog
-from api.models.quote import QuoteStatus, QuoteItem
+from api.models.quote import QuoteItem
+from api.app.domain.quote.enums import QuoteStatus, parse_quote_status
 from api.models.supplier import SupplierQuote, Supplier, SupplierUser
 from api.schemas import QuoteCreate, QuoteUpdate, QuoteOut, QuoteListOut, MessageOut
 from api.schemas.quote import QuoteItemCreate
@@ -178,7 +179,6 @@ def create_quote(
         company_contact_phone=payload.company_contact_phone,
         company_contact_email=payload.company_contact_email,
         status=QuoteStatus.DRAFT,
-        created_by=current_user.id,
         department_id=effective_department_id,
         assigned_to_id=effective_assigned_to_id,
     )
@@ -388,8 +388,8 @@ def submit_quote(
     event = QuoteStatusChanged(
         event_type="quote.status.changed",
         quote_id=row.id,
-        old_status=QuoteStatus(previous_status),
-        new_status=QuoteStatus(row.status),
+        old_status=parse_quote_status(str(previous_status)),
+        new_status=parse_quote_status(str(row.status)),
         reason=row.transition_reason,
         actor_id=current_user.id,
     )
@@ -435,8 +435,8 @@ def approve_quote(
     event = QuoteStatusChanged(
         event_type="quote.status.changed",
         quote_id=row.id,
-        old_status=QuoteStatus(previous_status),
-        new_status=QuoteStatus(row.status),
+        old_status=parse_quote_status(str(previous_status)),
+        new_status=parse_quote_status(str(row.status)),
         reason=row.transition_reason,
         actor_id=current_user.id,
     )
@@ -488,8 +488,8 @@ def reject_quote(
     event = QuoteStatusChanged(
         event_type="quote.status.changed",
         quote_id=row.id,
-        old_status=QuoteStatus(previous_status),
-        new_status=QuoteStatus(row.status),
+        old_status=parse_quote_status(str(previous_status)),
+        new_status=parse_quote_status(str(row.status)),
         reason=row.transition_reason,
         actor_id=current_user.id,
     )
@@ -646,7 +646,7 @@ def request_quote_revision(
                     db.query(SupplierUser)
                     .filter(
                         SupplierUser.supplier_id == sq.supplier_id,
-                        SupplierUser.is_active == True,
+                        SupplierUser.is_active,
                     )
                     .all()
                 )
@@ -688,9 +688,13 @@ def submit_revised_quote(
     if not row:
         raise HTTPException(status_code=404, detail="Quote not found")
 
+        supplier_quote_id: int = payload.get("supplier_quote_id")  # type: ignore
+        if supplier_quote_id is None:
+            raise HTTPException(status_code=400, detail="supplier_quote_id zorunlu")
+        supplier_quote_id = int(supplier_quote_id)
     result = QuoteService.submit_revised_quote(
         db,
-        payload.get("supplier_quote_id"),
+        supplier_quote_id,
         payload.get("revised_prices", []),
         current_user.id,
     )
