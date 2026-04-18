@@ -156,7 +156,9 @@ def _build_public_plan_price_lookup(db: Session) -> dict[str, dict[str, int | st
     lookup: dict[str, dict[str, int | str]] = {}
     for audience_key in ("strategic_partner", "supplier"):
         audience_block = config.get(audience_key, {})
-        plans = audience_block.get("plans", []) if isinstance(audience_block, dict) else []
+        plans = (
+            audience_block.get("plans", []) if isinstance(audience_block, dict) else []
+        )
         if not isinstance(plans, list):
             continue
         for plan in plans:
@@ -266,8 +268,12 @@ async def register_tenant(
     # Ucretli planlar icin odeme zorunlulugu
     payment_verified = False
     price_lookup = _build_public_plan_price_lookup(db)
-    selected_plan_price = int(price_lookup.get(plan_code, {}).get("price_monthly", 0) or 0)
-    selected_plan_currency = str(price_lookup.get(plan_code, {}).get("currency") or "TRY")
+    selected_plan_price = int(
+        price_lookup.get(plan_code, {}).get("price_monthly", 0) or 0
+    )
+    selected_plan_currency = str(
+        price_lookup.get(plan_code, {}).get("currency") or "TRY"
+    )
 
     if selected_plan_price > 0:
         if payload.payment_transaction_id is None:
