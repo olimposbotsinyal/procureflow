@@ -5,8 +5,15 @@ export type AuthUser = {
   id: number;
   email: string;
   role: Role;
+  business_role?: string | null;
+  system_role?: string | null;
   full_name?: string;
   department_id?: number | null;
+  organization_name?: string | null;
+  organization_logo_url?: string | null;
+  workspace_label?: string | null;
+  platform_name?: string | null;
+  platform_domain?: string | null;
 };
 
 export type AuthContextType = {

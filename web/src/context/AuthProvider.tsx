@@ -8,8 +8,8 @@ import {
   setAccessToken,
   setRefreshToken,
 } from "../lib/token";
-import { getSupplierAccessToken } from "../lib/session";
-import { loginRequest, logoutRequest, meRequest, refreshRequest } from "../services/auth.service";
+import { shouldUseSupplierSession } from "../lib/session";
+import { loginRequest, logoutRequest, meRequest, normalizeAuthUser, refreshRequest } from "../services/auth.service";
 
 type Props = { children: ReactNode };
 
@@ -21,7 +21,7 @@ function readStoredUser(): AuthUser | null {
   if (!raw) return null;
 
   try {
-    return JSON.parse(raw) as AuthUser;
+    return normalizeAuthUser(JSON.parse(raw) as AuthUser);
   } catch {
     sessionStorage.removeItem(USER_KEY);
     localStorage.removeItem(USER_KEY);
@@ -30,15 +30,11 @@ function readStoredUser(): AuthUser | null {
 }
 
 function shouldSkipAdminAuth(pathname: string): boolean {
-  const isSupplierPage = pathname.includes("/supplier/");
-  if (isSupplierPage) return true;
-
-  if (pathname.includes("/supplier/register") || pathname.includes("/supplier/login")) {
+  if (pathname.includes("/activate-account")) {
     return true;
   }
 
-  const supplierToken = getSupplierAccessToken();
-  return Boolean(supplierToken);
+  return shouldUseSupplierSession(pathname);
 }
 
 export function AuthProvider({ children }: Props) {

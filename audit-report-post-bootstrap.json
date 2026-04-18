@@ -1,0 +1,215 @@
+{
+  "total_users": 18,
+  "users_with_issues": 15,
+  "issue_counts": {
+    "tenant_role_missing_tenant_id": 15
+  },
+  "mismatches": [
+    {
+      "id": 1,
+      "email": "deleted-user-1-20260414164420@procureflow.local",
+      "full_name": "Silinen Personel (Isten Ayrildi)",
+      "role": "admin",
+      "system_role": "tenant_admin",
+      "tenant_id": null,
+      "created_by_id": null,
+      "is_active": false,
+      "issues": [
+        "tenant_role_missing_tenant_id"
+      ]
+    },
+    {
+      "id": 2,
+      "email": "satinalma@example.com",
+      "full_name": "SATIN ALAMA",
+      "role": "satinalmaci",
+      "system_role": "tenant_member",
+      "tenant_id": null,
+      "created_by_id": null,
+      "is_active": true,
+      "issues": [
+        "tenant_role_missing_tenant_id"
+      ]
+    },
+    {
+      "id": 3,
+      "email": "deleted-user-3-20260414122016@procureflow.local",
+      "full_name": "Silinen Personel (Isten Ayrildi)",
+      "role": "user",
+      "system_role": "tenant_member",
+      "tenant_id": null,
+      "created_by_id": null,
+      "is_active": false,
+      "issues": [
+        "tenant_role_missing_tenant_id"
+      ]
+    },
+    {
+      "id": 5,
+      "email": "deleted-user-5-20260414122124@procureflow.local",
+      "full_name": "Silinen Personel (Isten Ayrildi)",
+      "role": "satinalma_direktoru",
+      "system_role": "tenant_member",
+      "tenant_id": null,
+      "created_by_id": null,
+      "is_active": false,
+      "issues": [
+        "tenant_role_missing_tenant_id"
+      ]
+    },
+    {
+      "id": 6,
+      "email": "deleted-user-6-20260414164433@procureflow.local",
+      "full_name": "Silinen Personel (Isten Ayrildi)",
+      "role": "satinalma_direktoru",
+      "system_role": "tenant_member",
+      "tenant_id": null,
+      "created_by_id": null,
+      "is_active": false,
+      "issues": [
+        "tenant_role_missing_tenant_id"
+      ]
+    },
+    {
+      "id": 8,
+      "email": "satinalmauzmani@example.com",
+      "full_name": "SATIN ALAMA UZMANI",
+      "role": "satinalma_uzmani",
+      "system_role": "tenant_member",
+      "tenant_id": null,
+      "created_by_id": null,
+      "is_active": true,
+      "issues": [
+        "tenant_role_missing_tenant_id"
+      ]
+    },
+    {
+      "id": 9,
+      "email": "satinalmayoneticisi@example.com",
+      "full_name": "SATIN ALAMA YONETICISI",
+      "role": "satinalma_yoneticisi",
+      "system_role": "tenant_member",
+      "tenant_id": null,
+      "created_by_id": null,
+      "is_active": true,
+      "issues": [
+        "tenant_role_missing_tenant_id"
+      ]
+    },
+    {
+      "id": 10,
+      "email": "deleted-user-10-20260414164316@procureflow.local",
+      "full_name": "Silinen Personel (Isten Ayrildi)",
+      "role": "admin",
+      "system_role": "tenant_admin",
+      "tenant_id": null,
+      "created_by_id": null,
+      "is_active": false,
+      "issues": [
+        "tenant_role_missing_tenant_id"
+      ]
+    },
+    {
+      "id": 11,
+      "email": "deleted-user-11-20260414122137@procureflow.local",
+      "full_name": "Silinen Personel (Isten Ayrildi)",
+      "role": "satinalmaci",
+      "system_role": "tenant_member",
+      "tenant_id": null,
+      "created_by_id": null,
+      "is_active": false,
+      "issues": [
+        "tenant_role_missing_tenant_id"
+      ]
+    },
+    {
+      "id": 12,
+      "email": "deleted-user-12-20260414122031@procureflow.local",
+      "full_name": "Silinen Personel (Isten Ayrildi)",
+      "role": "satinalma_uzman",
+      "system_role": "tenant_member",
+      "tenant_id": null,
+      "created_by_id": null,
+      "is_active": false,
+      "issues": [
+        "tenant_role_missing_tenant_id"
+      ]
+    },
+    {
+      "id": 13,
+      "email": "deleted-user-13-20260414122102@procureflow.local",
+      "full_name": "Silinen Personel (Isten Ayrildi)",
+      "role": "satinalma_yoneticisi",
+      "system_role": "tenant_member",
+      "tenant_id": null,
+      "created_by_id": null,
+      "is_active": false,
+      "issues": [
+        "tenant_role_missing_tenant_id"
+      ]
+    },
+    {
+      "id": 14,
+      "email": "deleted-user-14-20260414122057@procureflow.local",
+      "full_name": "Silinen Personel (Isten Ayrildi)",
+      "role": "satinalma_direktoru",
+      "system_role": "tenant_member",
+      "tenant_id": null,
+      "created_by_id": null,
+      "is_active": false,
+      "issues": [
+        "tenant_role_missing_tenant_id"
+      ]
+    },
+    {
+      "id": 15,
+      "email": "deleted-user-15-20260414122041@procureflow.local",
+      "full_name": "Silinen Personel (Isten Ayrildi)",
+      "role": "satinalma_direktoru",
+      "system_role": "tenant_member",
+      "tenant_id": null,
+      "created_by_id": null,
+      "is_active": false,
+      "issues": [
+        "tenant_role_missing_tenant_id"
+      ]
+    },
+    {
+      "id": 16,
+      "email": "deleted-user-16-20260414122157@procureflow.local",
+      "full_name": "Silinen Personel (Isten Ayrildi)",
+      "role": "satinalma_direktoru",
+      "system_role": "tenant_member",
+      "tenant_id": null,
+      "created_by_id": null,
+      "is_active": false,
+      "issues": [
+        "tenant_role_missing_tenant_id"
+      ]
+    },
+    {
+      "id": 19,
+      "email": "satinalmaci@example.com",
+      "full_name": "Satın Almacı",
+      "role": "satinalmaci",
+      "system_role": "tenant_member",
+      "tenant_id": null,
+      "created_by_id": null,
+      "is_active": true,
+      "issues": [
+        "tenant_role_missing_tenant_id"
+      ]
+    }
+  ],
+  "quote_approval_transition": {
+    "total_quote_approvals": 6,
+    "quote_approvals_with_issues": 0,
+    "issue_counts": {},
+    "samples": [],
+    "repair_preview": {
+      "preview_rows": 0,
+      "fix_type_counts": {},
+      "samples": []
+    }
+  }
+}

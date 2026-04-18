@@ -23,6 +23,7 @@ class RoleUpdate(BaseModel):
 class RoleOut(RoleBase):
     id: int
     is_active: bool
+    created_by_id: int | None = None
     hierarchy_level: int
     parent_id: int | None = None
     permissions: list[PermissionOut] = []

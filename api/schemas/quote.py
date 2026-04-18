@@ -1,8 +1,12 @@
 """Quote ve Teklif İsteği (RFQ) Şemaları"""
 
-from pydantic import BaseModel, ConfigDict, Field
+from enum import Enum
+
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 from datetime import datetime
-from typing import Optional, Literal
+from typing import Optional
+
+from api.app.domain.quote.enums import to_public_quote_status
 
 
 # ============ QUOTE ITEM SCHEMAS ============
@@ -33,6 +37,11 @@ class QuoteItemOut(QuoteItemCreate):
     sequence: int
 
     model_config = ConfigDict(from_attributes=True)
+
+    @computed_field
+    @property
+    def rfq_id(self) -> int:
+        return self.quote_id
 
 
 # ============ QUOTE SCHEMAS ============
@@ -92,6 +101,22 @@ class QuoteOut(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+    @computed_field
+    @property
+    def rfq_id(self) -> int:
+        return self.id
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def normalize_status(cls, value: object) -> str:
+        if value is None:
+            return "draft"
+        if isinstance(value, Enum):
+            raw_value = value.value
+        else:
+            raw_value = str(value)
+        return to_public_quote_status(raw_value)
+
 
 # Uyumluluk için eski şemalar
 class QuoteCreateOld(BaseModel):
@@ -124,7 +149,9 @@ class QuoteApprovalCreate(BaseModel):
 
     quote_id: int
     approval_level: int
-    required_role: str
+    # Compatibility mirror during the transition; required_business_role is the primary field.
+    required_role: Optional[str] = None
+    required_business_role: Optional[str] = None
 
 
 class QuoteApprovalOut(BaseModel):
@@ -133,7 +160,9 @@ class QuoteApprovalOut(BaseModel):
     id: int
     quote_id: int
     approval_level: int
-    required_role: str
+    # Compatibility mirror during the transition; clients should prefer required_business_role.
+    required_role: Optional[str] = None
+    required_business_role: Optional[str] = None
     status: str
     comment: Optional[str] = None
     requested_at: datetime
@@ -141,3 +170,27 @@ class QuoteApprovalOut(BaseModel):
     approved_by_id: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+    @computed_field
+    @property
+    def rfq_id(self) -> int:
+        return self.quote_id
+
+
+class RfqCreate(QuoteCreate):
+    """RFQ oluşturma alias'ı; mevcut QuoteCreate sözleşmesi ile uyumludur."""
+
+
+class RfqUpdate(QuoteUpdate):
+    """RFQ güncelleme alias'ı; mevcut QuoteUpdate sözleşmesi ile uyumludur."""
+
+
+class RfqOut(QuoteOut):
+    """RFQ çıktı alias'ı; mevcut QuoteOut sözleşmesi ile uyumludur."""
+
+
+class RfqListOut(BaseModel):
+    count: int
+    page: int
+    size: int
+    items: list[RfqOut]

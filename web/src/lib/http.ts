@@ -56,6 +56,7 @@ http.interceptors.request.use((config) => {
   // Public endpoints - token gönderme (auth gerekmiyor)
   const isPublicEndpoint = 
     config.url?.includes("/auth/login") ||
+    config.url?.includes("/auth/activate") ||
     config.url?.includes("/supplier/register") ||
     config.url?.includes("/supplier/login");
   
@@ -105,6 +106,7 @@ http.interceptors.response.use(
     if (status === 401) {
       const isAuthEndpoint =
         url.includes("/auth/login") ||
+        url.includes("/auth/activate") ||
         url.includes("/auth/me") ||
         url.includes("/auth/refresh") ||
         url.includes("/auth/logout") ||

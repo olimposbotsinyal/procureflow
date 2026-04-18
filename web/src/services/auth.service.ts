@@ -34,6 +34,39 @@ export type LoginResponse = {
   user: AuthUser | null;
 };
 
+function deriveSystemRole(user: Pick<AuthUser, "role" | "system_role">): string | null {
+  const explicitSystemRole = String(user.system_role || "").toLowerCase();
+  if (explicitSystemRole) {
+    return explicitSystemRole;
+  }
+
+  const role = String(user.role || "").toLowerCase();
+  if (role === "super_admin") {
+    return "super_admin";
+  }
+  if (role === "admin") {
+    return "tenant_admin";
+  }
+  return "tenant_member";
+}
+
+export function normalizeAuthUser(user: AuthUser | null | undefined): AuthUser | null {
+  if (!user) {
+    return null;
+  }
+
+  const role = String(user.role || "").toLowerCase() as AuthUser["role"];
+  const businessRole = String(user.business_role || role || "").toLowerCase() || null;
+  const systemRole = deriveSystemRole(user);
+
+  return {
+    ...user,
+    role,
+    business_role: businessRole,
+    system_role: systemRole,
+  };
+}
+
 export async function loginRequest(email: string, password: string): Promise<LoginResponse> {
   try {
     const res = await http.post<LoginApiResponse>("/auth/login", { email, password });
@@ -48,7 +81,7 @@ export async function loginRequest(email: string, password: string): Promise<Log
     return {
       accessToken: data.access_token,
       refreshToken: data.refresh_token,
-      user: data.user ?? null,
+      user: normalizeAuthUser(data.user ?? null),
     };
   } catch (error: unknown) {
     if (axios.isAxiosError(error) && error.response?.status === 401) {
@@ -119,13 +152,48 @@ export async function supplierRegisterRequest(token: string, password: string): 
 export async function meRequest(): Promise<AuthUser> {
   const res = await http.get<AuthUser>("/auth/me");
   console.log("[AUTH] /me endpoint'den kullanıcı bilgisi alındı:", res.data);
-  return res.data;
+  return normalizeAuthUser(res.data) as AuthUser;
 }
 
 export type RefreshResponse = {
   accessToken: string;
   refreshToken: string;
 };
+
+export type ActivationVerifyResponse = {
+  valid: boolean;
+  email: string;
+  full_name: string;
+  role: AuthUser["role"];
+  business_role?: string | null;
+  system_role?: string | null;
+  accepted: boolean;
+  organization_name?: string | null;
+  organization_logo_url?: string | null;
+  workspace_label?: string | null;
+  platform_name?: string | null;
+  platform_domain?: string | null;
+};
+
+export async function verifyInternalActivationToken(token: string): Promise<ActivationVerifyResponse> {
+  const res = await http.post<ActivationVerifyResponse>("/auth/activate/verify", { token });
+  return res.data;
+}
+
+export async function activateInternalUserRequest(token: string, password: string): Promise<LoginResponse> {
+  const res = await http.post<LoginApiResponse>("/auth/activate", { token, password });
+  const data = res.data;
+
+  if (!data?.access_token || !data?.refresh_token) {
+    throw new Error("Aktivasyon yanıtında token bilgisi eksik.");
+  }
+
+  return {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token,
+    user: normalizeAuthUser(data.user ?? null),
+  };
+}
 
 export async function refreshRequest(refreshToken: string): Promise<RefreshResponse> {
   const res = await http.post<LoginApiResponse>("/auth/refresh", {

@@ -1,19 +1,20 @@
 // QuoteCreatePage — Profesyonel Teklif Talebi Oluşturma
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { createQuote, updateQuoteItems } from "../services/quote.service";
-import type { QuoteItemPayload } from "../services/quote.service";
+import { createRfq, updateRfqItems } from "../services/quote.service";
+import type { RfqItemPayload } from "../services/quote.service";
 import {
   getDepartments,
-  getPersonnel,
+  getTenantUsers,
   getProjects,
   type Department,
-  type Personnel,
+  type TenantUser,
   type Project,
 } from "../services/admin.service";
 import { getAccessToken } from "../lib/token";
 import { useAuth } from "../hooks/useAuth";
 import { getSettings } from "../services/settings.service";
+import { canManageQuoteWorkspace, isPlatformStaffUser, isScopedTenantUser } from "../auth/permissions";
 
 const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -95,7 +96,7 @@ const S = {
   },
 };
 
-const EMPTY_ITEM = (): QuoteItemPayload => ({
+const EMPTY_ITEM = (): RfqItemPayload => ({
   line_number: "",
   category_code: "",
   category_name: "",
@@ -137,7 +138,7 @@ const readFileAsDataUrl = (file: File): Promise<string> =>
     reader.readAsDataURL(file);
   });
 
-const renumberItems = (rows: QuoteItemPayload[]): QuoteItemPayload[] => {
+const renumberItems = (rows: RfqItemPayload[]): RfqItemPayload[] => {
   let groupNo = 0;
   let currentGroup = "";
   let plainNo = 0;
@@ -182,13 +183,13 @@ const renumberItems = (rows: QuoteItemPayload[]): QuoteItemPayload[] => {
   });
 };
 
-const isGroupHeaderRow = (item: QuoteItemPayload): boolean => {
+const isGroupHeaderRow = (item: RfqItemPayload): boolean => {
   if (item.is_group_header) return true;
   const line = String(item.line_number || "").trim();
   return line.length > 0 && !line.includes(".");
 };
 
-const resolveGroupKey = (item: QuoteItemPayload): string => {
+const resolveGroupKey = (item: RfqItemPayload): string => {
   if (item.group_key) return String(item.group_key);
   const line = String(item.line_number || "").trim();
   if (!line) return "";
@@ -197,7 +198,7 @@ const resolveGroupKey = (item: QuoteItemPayload): string => {
 
 type GroupTotals = { net: number; vat: number; gross: number };
 
-const buildGroupTotals = (rows: QuoteItemPayload[]): Record<string, GroupTotals> => {
+const buildGroupTotals = (rows: RfqItemPayload[]): Record<string, GroupTotals> => {
   const totals: Record<string, GroupTotals> = {};
   rows.forEach((row) => {
     if (isGroupHeaderRow(row)) return;
@@ -221,10 +222,12 @@ export default function QuoteCreatePage() {
   const [searchParams] = useSearchParams();
   const fileRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
+  const readOnly = isPlatformStaffUser(user);
+  const canManageQuotes = canManageQuoteWorkspace(user);
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [personnel, setPersonnel] = useState<Personnel[]>([]);
+  const [personnel, setPersonnel] = useState<TenantUser[]>([]);
 
   const [projectId, setProjectId] = useState<number | "">("");
   const [departmentId, setDepartmentId] = useState<number | "">("");
@@ -235,14 +238,14 @@ export default function QuoteCreatePage() {
 
   const [mode, setMode] = useState<"manual" | "excel">("manual");
   const [excelFile, setExcelFile] = useState<File | null>(null);
-  const [items, setItems] = useState<QuoteItemPayload[]>(renumberItems([EMPTY_ITEM()]));
+  const [items, setItems] = useState<RfqItemPayload[]>(renumberItems([EMPTY_ITEM()]));
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [vatRates, setVatRates] = useState<number[]>([1, 10, 20]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isScopedUser = Boolean(user && user.role !== "admin" && user.role !== "super_admin");
+  const isScopedUser = isScopedTenantUser(user);
 
   useEffect(() => {
     if (!isScopedUser || !user) return;
@@ -261,7 +264,7 @@ export default function QuoteCreatePage() {
 
   // Veri yükleme
   useEffect(() => {
-    Promise.all([getProjects(), getDepartments(), getPersonnel()]).then(
+    Promise.all([getProjects(), getDepartments(), getTenantUsers()]).then(
       ([p, d, u]) => { setProjects(p); setDepartments(d); setPersonnel(u); }
     );
 
@@ -305,7 +308,7 @@ export default function QuoteCreatePage() {
   const overallGross = overallNet + overallVat;
 
   // --- Items helpers ---
-  const updateItem = (idx: number, field: keyof QuoteItemPayload, val: string | number | undefined) => {
+  const updateItem = (idx: number, field: keyof RfqItemPayload, val: string | number | undefined) => {
     setItems((prev) => {
       const next = [...prev];
       const item = { ...next[idx], [field]: val };
@@ -369,6 +372,10 @@ export default function QuoteCreatePage() {
   // --- Submit ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canManageQuotes) {
+      setError("Bu hesap teklif olusturma yetkisine sahip degil");
+      return;
+    }
     if (!projectId) { setError("Lütfen proje seçiniz"); return; }
     if (!title.trim()) { setError("Teklif başlığı zorunludur"); return; }
     if (!effectiveDepartmentId) { setError("Departman bilgisi bulunamadı. Yöneticinize başvurun."); return; }
@@ -421,7 +428,7 @@ export default function QuoteCreatePage() {
               vat_rate: Number(it.vat_rate ?? 20),
             };
           });
-        const quote = await createQuote({
+        const rfq = await createRfq({
           project_id: Number(projectId),
           title: title.trim(),
           description: description.trim() || undefined,
@@ -433,9 +440,9 @@ export default function QuoteCreatePage() {
           assigned_to_id: Number(effectiveAssignedToId),
         });
         if (validItems.length > 0) {
-          await updateQuoteItems(quote.id, validItems);
+          await updateRfqItems(rfq.id, validItems);
         }
-        navigate(`/quotes/${quote.id}`);
+        navigate(`/quotes/${rfq.id}`);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Teklif oluşturulamadı");
@@ -443,6 +450,26 @@ export default function QuoteCreatePage() {
       setLoading(false);
     }
   };
+
+  if (readOnly) {
+    return (
+      <div style={S.page}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px" }}>
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            style={{ padding: "6px 12px", background: "#f3f4f6", border: "1px solid #ddd", borderRadius: "6px", cursor: "pointer" }}
+          >
+            ← Geri
+          </button>
+          <h2 style={{ margin: 0, fontSize: "20px" }}>Yeni RFQ / Teklif Talebi</h2>
+        </div>
+        <div style={{ ...S.card, background: "#eff6ff", borderColor: "#bfdbfe", color: "#1e3a8a" }}>
+          Platform personeli teklif alaninda salt okunur erisime sahiptir. Yeni teklif olusturma akisi bu hesaplar icin kapatildi.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit} style={S.page}>
@@ -455,7 +482,12 @@ export default function QuoteCreatePage() {
         >
           ← Geri
         </button>
-        <h2 style={{ margin: 0, fontSize: "20px" }}>Yeni Teklif Talebi</h2>
+        <div>
+          <h2 style={{ margin: 0, fontSize: "20px" }}>Yeni RFQ / Teklif Talebi</h2>
+          <div style={{ marginTop: "4px", color: "#6b7280", fontSize: "13px" }}>
+            RFQ adapter gecisi aktif: bu ekran mevcut quote akisini korurken RFQ terminolojisini de gorunur kilir.
+          </div>
+        </div>
       </div>
 
       {error && (

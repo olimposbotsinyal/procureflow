@@ -1,0 +1,34 @@
+{
+  "summary": {
+    "section_count": 5,
+    "issue_counts": {},
+    "problem_sample_rows": 0
+  },
+  "sections": {
+    "quotes": {
+      "total_rows": 23,
+      "issue_counts": {},
+      "samples": []
+    },
+    "supplier_quotes": {
+      "total_rows": 20,
+      "issue_counts": {},
+      "samples": []
+    },
+    "quote_approvals": {
+      "total_rows": 6,
+      "issue_counts": {},
+      "samples": []
+    },
+    "quote_status_logs": {
+      "total_rows": 34,
+      "issue_counts": {},
+      "samples": []
+    },
+    "report_chain": {
+      "total_rows": 0,
+      "issue_counts": {},
+      "samples": []
+    }
+  }
+}

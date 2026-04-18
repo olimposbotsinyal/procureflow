@@ -5,6 +5,7 @@ import PageLoader from "../components/PageLoader";
 import QuoteList from "../components/QuoteList";
 import { useEffect, useState } from "react";
 import { getFinanceMismatches } from "../services/admin.service";
+import { canAccessAdminSurface, getRoleIcon, getUserDisplayRoleLabel, getWorkspaceLabelFallback, normalizedBusinessRole } from "../auth/permissions";
 
 interface MismatchItem {
   supplier_id: number;
@@ -20,34 +21,54 @@ interface MismatchItem {
 export default function DashboardPage() {
   const { user, logout } = useAuth();
   const [mismatches, setMismatches] = useState<MismatchItem[]>([]);
+  const workspaceName = user?.organization_name || user?.platform_name || "Buyera Asistans";
+  const workspaceLabel = user?.workspace_label || getWorkspaceLabelFallback(user);
 
   useEffect(() => {
-    if (user?.role === "admin" || user?.role === "super_admin") {
+    if (canAccessAdminSurface(user)) {
       getFinanceMismatches(5)
         .then((data) => setMismatches(data.items as MismatchItem[]))
         .catch(() => {/* sessiz hata */});
     }
-  }, [user?.role]);
+  }, [user]);
 
   if (!user) return <PageLoader text="Kullanıcı bilgileri yükleniyor..." />;
+  const normalizedRole = normalizedBusinessRole(user);
+  const roleIcon = getRoleIcon(normalizedRole);
+  const roleLabel = getUserDisplayRoleLabel(user);
 
   return (
     <div style={{ fontFamily: "Arial" }}>
       <div style={{ maxWidth: 760, margin: "32px auto", padding: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            marginBottom: "20px",
+            borderRadius: 28,
+            padding: 24,
+            color: "white",
+            background: "linear-gradient(135deg, #16302b 0%, #294d45 52%, #e5c383 100%)",
+          }}
+        >
           <div>
-            <h2 style={{ margin: "0 0 8px 0" }}>Dashboard</h2>
-            <p style={{ margin: "4px 0", color: "#666", fontSize: "14px" }}>
-              Hoşgeldin, {user.email} ({user.role})
+            <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 2, textTransform: "uppercase", color: "#fef3c7" }}>
+              {user.platform_name || "Buyera Asistans"}
+            </div>
+            <h2 style={{ margin: "10px 0 8px 0", fontSize: 34, lineHeight: 1.08 }}>{workspaceName}</h2>
+            <p style={{ margin: "4px 0", color: "#e2e8f0", fontSize: "14px", lineHeight: 1.7 }}>
+              {workspaceLabel}. Hoşgeldin, {roleIcon} {user.email} ({roleLabel})
             </p>
           </div>
           <button
             onClick={logout}
             style={{
               padding: "8px 12px",
-              borderRadius: 8,
-              border: "1px solid #d1d5db",
-              background: "#fff",
+              borderRadius: 12,
+              border: "1px solid rgba(255,255,255,0.18)",
+              background: "rgba(255,255,255,0.12)",
+              color: "white",
               cursor: "pointer",
             }}
           >
@@ -55,7 +76,7 @@ export default function DashboardPage() {
           </button>
         </div>
 
-        {(user.role === "admin" || user.role === "super_admin") && (
+        {canAccessAdminSurface(user) && (
           <div style={{ background: "#f0f4ff", padding: "12px", borderRadius: "8px", marginBottom: "20px" }}>
             <Link to="/admin/quotes" style={{ color: "#3b82f6", textDecoration: "none", fontWeight: "bold" }}>
               → Tüm Teklifleri Yönet (Admin)

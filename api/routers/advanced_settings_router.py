@@ -1,7 +1,7 @@
 # FILE: /api/routers/advanced_settings_router.py
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
 import secrets
 import smtplib
 from smtplib import SMTPAuthenticationError, SMTPException, SMTPServerDisconnected
@@ -20,7 +20,14 @@ from api.models import (
     APIKey,
     User,
 )
+from api.models.assignment import CompanyRole
+from api.models.company import Company
 from api.database import get_db
+from api.core.authz import (
+    TENANT_ADMIN_SYSTEM_ROLES,
+    can_access_procurement_settings,
+    can_manage_shared_email_profiles,
+)
 from api.core.deps import get_current_user
 from api.core.time import utcnow
 
@@ -29,7 +36,7 @@ router = APIRouter(prefix="/advanced-settings", tags=["advanced-settings"])
 
 def _ensure_admin(current_user: User) -> User:
     """Admin check function"""
-    if current_user.role not in ["super_admin", "admin"]:
+    if not can_access_procurement_settings(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Bu işlem için admin yetkisi gerekli",
@@ -37,12 +44,36 @@ def _ensure_admin(current_user: User) -> User:
     return current_user
 
 
-def _get_or_create_settings(db: Session, model_class, setting_type: str = "default"):
+def _resolve_email_profile_owner(
+    current_user: User, owner_user_id: int | None = None
+) -> int | None:
+    if can_manage_shared_email_profiles(current_user):
+        return owner_user_id
+    return current_user.id
+
+
+def _get_or_create_settings(
+    db: Session,
+    model_class,
+    setting_type: str = "default",
+    owner_user_id: int | None = None,
+):
     """Generic function to get or create singleton settings"""
-    settings = db.query(model_class).first()
+    settings_query = db.query(model_class)
+    if model_class == EmailSettings:
+        if owner_user_id is None:
+            settings_query = settings_query.filter(
+                EmailSettings.owner_user_id.is_(None)
+            )
+        else:
+            settings_query = settings_query.filter(
+                EmailSettings.owner_user_id == owner_user_id
+            )
+    settings = settings_query.first()
     if not settings:
         if model_class == EmailSettings:
             settings = EmailSettings(
+                owner_user_id=owner_user_id,
                 smtp_host="",
                 smtp_port=587,
                 smtp_username="",
@@ -52,6 +83,14 @@ def _get_or_create_settings(db: Session, model_class, setting_type: str = "defau
                 use_tls=True,
                 use_ssl=False,
                 enable_email_notifications=False,
+                mail_domain="",
+                app_url="",
+                use_custom_app_url=False,
+                reply_to_email="",
+                bounce_email="",
+                mailbox_support_email="",
+                enable_list_unsubscribe=True,
+                enable_strict_from_alignment=True,
             )
         elif model_class == LoggingSettings:
             settings = LoggingSettings(
@@ -100,13 +139,19 @@ def _get_or_create_settings(db: Session, model_class, setting_type: str = "defau
 
 @router.get("/email", response_model=dict)
 async def get_email_settings(
-    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    owner_user_id: int | None = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Get email (SMTP) settings - Admin only"""
     _ensure_admin(current_user)
-    settings = _get_or_create_settings(db, EmailSettings)
+    resolved_owner_id = _resolve_email_profile_owner(current_user, owner_user_id)
+    settings = _get_or_create_settings(
+        db, EmailSettings, owner_user_id=resolved_owner_id
+    )
     return {
         "id": settings.id,
+        "owner_user_id": settings.owner_user_id,
         "smtp_host": settings.smtp_host,
         "smtp_port": settings.smtp_port,
         "smtp_username": settings.smtp_username,
@@ -116,39 +161,156 @@ async def get_email_settings(
         "use_tls": settings.use_tls,
         "use_ssl": settings.use_ssl,
         "enable_email_notifications": settings.enable_email_notifications,
+        "mail_domain": settings.mail_domain,
+        "app_url": settings.app_url,
+        "use_custom_app_url": settings.use_custom_app_url,
+        "reply_to_email": settings.reply_to_email,
+        "bounce_email": settings.bounce_email,
+        "mailbox_support_email": settings.mailbox_support_email,
+        "enable_list_unsubscribe": settings.enable_list_unsubscribe,
+        "enable_strict_from_alignment": settings.enable_strict_from_alignment,
+        "signature_name": settings.signature_name,
+        "signature_title": settings.signature_title,
+        "signature_note": settings.signature_note,
+        "signature_image_url": settings.signature_image_url,
         "updated_at": getattr(settings, "updated_at", None),
     }
+
+
+@router.get("/email/profiles", response_model=list[dict])
+async def list_email_profiles(
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    _ensure_admin(current_user)
+    if not can_manage_shared_email_profiles(current_user):
+        settings = _get_or_create_settings(
+            db, EmailSettings, owner_user_id=current_user.id
+        )
+        return [
+            {
+                "owner_user_id": current_user.id,
+                "label": "Kendi SMTP profilim",
+                "kind": "personal",
+                "from_email": settings.from_email,
+            }
+        ]
+
+    rows = db.query(EmailSettings).all()
+    users = {
+        row.id: row
+        for row in db.query(User)
+        .filter(User.system_role.in_(tuple(TENANT_ADMIN_SYSTEM_ROLES)))
+        .all()
+    }
+    profiles: list[dict] = []
+    default_row = next((row for row in rows if row.owner_user_id is None), None)
+    if default_row is None:
+        default_row = _get_or_create_settings(db, EmailSettings, owner_user_id=None)
+    profiles.append(
+        {
+            "owner_user_id": None,
+            "label": "Varsayılan Sistem SMTP",
+            "kind": "default",
+            "from_email": default_row.from_email,
+        }
+    )
+    for admin_id, admin_user in users.items():
+        row = next((item for item in rows if item.owner_user_id == admin_id), None)
+        company_names = [
+            name
+            for (name,) in db.query(Company.name)
+            .join(CompanyRole, CompanyRole.company_id == Company.id)
+            .filter(CompanyRole.user_id == admin_id, CompanyRole.is_active.is_(True))
+            .distinct()
+            .order_by(Company.name.asc())
+            .all()
+        ]
+        company_suffix = f" ({', '.join(company_names)})" if company_names else ""
+        profiles.append(
+            {
+                "owner_user_id": admin_id,
+                "label": f"Firma SMTP: {admin_user.full_name}{company_suffix}",
+                "kind": "personal",
+                "from_email": row.from_email if row else "",
+            }
+        )
+    return profiles
 
 
 @router.put("/email", response_model=dict)
 async def update_email_settings(
     data: dict,
+    owner_user_id: int | None = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Update email (SMTP) settings - Admin only"""
     _ensure_admin(current_user)
-    settings = _get_or_create_settings(db, EmailSettings)
+    resolved_owner_id = _resolve_email_profile_owner(current_user, owner_user_id)
+    settings = _get_or_create_settings(
+        db, EmailSettings, owner_user_id=resolved_owner_id
+    )
 
-    # Update fields
+    # Update fields (hem veritabanı hem .env için toplanacak)
+    env_updates = {}
     if "smtp_host" in data:
         settings.smtp_host = data["smtp_host"]
+        env_updates["SMTP_SERVER"] = data["smtp_host"]
     if "smtp_port" in data:
         settings.smtp_port = data["smtp_port"]
+        env_updates["SMTP_PORT"] = str(data["smtp_port"])
     if "smtp_username" in data:
         settings.smtp_username = data["smtp_username"]
+        env_updates["SENDER_EMAIL"] = data["smtp_username"]
     if "smtp_password" in data:
         settings.smtp_password = data["smtp_password"]
+        env_updates["SENDER_PASSWORD"] = data["smtp_password"]
     if "from_email" in data:
         settings.from_email = data["from_email"]
+        # .env'de FROM_EMAIL varsa güncellenebilir
+        env_updates["FROM_EMAIL"] = data["from_email"]
     if "from_name" in data:
         settings.from_name = data["from_name"]
+        env_updates["MAIL_FROM_NAME"] = data["from_name"]
     if "use_tls" in data:
         settings.use_tls = data["use_tls"]
+        env_updates["SMTP_USE_TLS"] = str(data["use_tls"]).lower()
     if "use_ssl" in data:
         settings.use_ssl = data["use_ssl"]
+        env_updates["SMTP_USE_SSL"] = str(data["use_ssl"]).lower()
     if "enable_email_notifications" in data:
         settings.enable_email_notifications = data["enable_email_notifications"]
+    if "mail_domain" in data:
+        settings.mail_domain = (data["mail_domain"] or "").strip()
+        env_updates["MAIL_DOMAIN"] = settings.mail_domain
+    if "app_url" in data:
+        settings.app_url = (data["app_url"] or "").strip()
+        env_updates["APP_URL"] = settings.app_url
+    if "use_custom_app_url" in data:
+        settings.use_custom_app_url = bool(data["use_custom_app_url"])
+    if "reply_to_email" in data:
+        settings.reply_to_email = (data["reply_to_email"] or "").strip()
+        env_updates["MAIL_REPLY_TO"] = settings.reply_to_email
+    if "bounce_email" in data:
+        settings.bounce_email = (data["bounce_email"] or "").strip()
+        env_updates["MAIL_BOUNCE_EMAIL"] = settings.bounce_email
+    if "mailbox_support_email" in data:
+        settings.mailbox_support_email = (data["mailbox_support_email"] or "").strip()
+        env_updates["MAILBOX_SUPPORT_EMAIL"] = settings.mailbox_support_email
+    if "enable_list_unsubscribe" in data:
+        settings.enable_list_unsubscribe = bool(data["enable_list_unsubscribe"])
+    if "enable_strict_from_alignment" in data:
+        settings.enable_strict_from_alignment = bool(
+            data["enable_strict_from_alignment"]
+        )
+    if "signature_name" in data:
+        settings.signature_name = (data["signature_name"] or "").strip()
+    if "signature_title" in data:
+        settings.signature_title = (data["signature_title"] or "").strip()
+    if "signature_note" in data:
+        settings.signature_note = (data["signature_note"] or "").strip()
+    if "signature_image_url" in data:
+        settings.signature_image_url = (data["signature_image_url"] or "").strip()
 
     if hasattr(settings, "updated_at"):
         settings.updated_at = utcnow()
@@ -158,8 +320,20 @@ async def update_email_settings(
     db.commit()
     db.refresh(settings)
 
+    # Sadece varsayılan sistem profili .env dosyasını günceller.
+    if resolved_owner_id is None:
+        try:
+            from api.utils.env_writer import update_env_file
+            import os
+
+            env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
+            update_env_file(env_path, env_updates)
+        except Exception as e:
+            print(f"[ENV] .env dosyası güncellenemedi: {e}")
+
     return {
         "id": settings.id,
+        "owner_user_id": settings.owner_user_id,
         "smtp_host": settings.smtp_host,
         "smtp_port": settings.smtp_port,
         "smtp_username": settings.smtp_username,
@@ -169,13 +343,80 @@ async def update_email_settings(
         "use_tls": settings.use_tls,
         "use_ssl": settings.use_ssl,
         "enable_email_notifications": settings.enable_email_notifications,
+        "mail_domain": settings.mail_domain,
+        "app_url": settings.app_url,
+        "use_custom_app_url": settings.use_custom_app_url,
+        "reply_to_email": settings.reply_to_email,
+        "bounce_email": settings.bounce_email,
+        "mailbox_support_email": settings.mailbox_support_email,
+        "enable_list_unsubscribe": settings.enable_list_unsubscribe,
+        "enable_strict_from_alignment": settings.enable_strict_from_alignment,
+        "signature_name": settings.signature_name,
+        "signature_title": settings.signature_title,
+        "signature_note": settings.signature_note,
+        "signature_image_url": settings.signature_image_url,
         "updated_at": getattr(settings, "updated_at", None),
     }
+
+
+@router.post("/email/signature-image", response_model=dict)
+async def upload_email_signature_image(
+    file: UploadFile = File(...),
+    owner_user_id: int | None = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _ensure_admin(current_user)
+    resolved_owner_id = _resolve_email_profile_owner(current_user, owner_user_id)
+    settings = _get_or_create_settings(
+        db, EmailSettings, owner_user_id=resolved_owner_id
+    )
+
+    allowed_types = {
+        "image/jpeg",
+        "image/jpg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "image/svg+xml",
+    }
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400, detail="Sadece resim dosyaları yüklenebilir"
+        )
+
+    content = await file.read()
+    if len(content) > 2 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="İmza görseli 2MB'dan büyük olamaz")
+
+    upload_dir = Path("uploads") / "email_signatures"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    ext = Path(file.filename or "signature.png").suffix.lower() or ".png"
+    filename = f"signature_{secrets.token_hex(8)}{ext}"
+    file_path = upload_dir / filename
+    file_path.write_bytes(content)
+
+    settings.signature_image_url = (
+        f"/api/v1/advanced-settings/email/signature-image/{filename}"
+    )
+    db.commit()
+    return {"success": True, "signature_image_url": settings.signature_image_url}
+
+
+@router.get("/email/signature-image/{filename}")
+async def get_email_signature_image(filename: str):
+    safe_name = Path(filename).name
+    file_path = Path("uploads") / "email_signatures" / safe_name
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Görsel bulunamadı")
+    return FileResponse(file_path)
 
 
 @router.post("/email/test", response_model=dict)
 async def test_email_settings(
     data: dict,
+    owner_user_id: int | None = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -189,10 +430,13 @@ async def test_email_settings(
             status_code=status.HTTP_400_BAD_REQUEST, detail="to_email alanı gerekli"
         )
 
-    settings = _get_or_create_settings(db, EmailSettings)
+    resolved_owner_id = _resolve_email_profile_owner(current_user, owner_user_id)
+    settings = _get_or_create_settings(
+        db, EmailSettings, owner_user_id=resolved_owner_id
+    )
 
     try:
-        print(f"[EMAIL] Test email gönderiliyor...")
+        print("[EMAIL] Test email gönderiliyor...")
         print(f"[EMAIL] SMTP Host: {settings.smtp_host}:{settings.smtp_port}")
         print(f"[EMAIL] Username: {settings.smtp_username}")
         print(f"[EMAIL] TLS: {settings.use_tls}, SSL: {settings.use_ssl}")
@@ -228,24 +472,25 @@ async def test_email_settings(
         msg.attach(MIMEText(body_html, "html", "utf-8"))
 
         # Send email
-        print(f"[EMAIL] SMTP bağlantısı kuruluyor...")
+        print("[EMAIL] SMTP bağlantısı kuruluyor...")
+        server: smtplib.SMTP | smtplib.SMTP_SSL
         if settings.use_ssl:
             server = smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port)
         else:
             server = smtplib.SMTP(settings.smtp_host, settings.smtp_port)
             if settings.use_tls:
-                print(f"[EMAIL] TLS başlatılıyor...")
+                print("[EMAIL] TLS başlatılıyor...")
                 server.starttls()
 
         if settings.smtp_username and settings.smtp_password:
-            print(f"[EMAIL] Login yapılıyor...")
+            print("[EMAIL] Login yapılıyor...")
             server.login(settings.smtp_username, settings.smtp_password)
-            print(f"[EMAIL] Login başarılı")
+            print("[EMAIL] Login başarılı")
 
-        print(f"[EMAIL] Email gönderiliyor...")
+        print("[EMAIL] Email gönderiliyor...")
         server.send_message(msg)
         server.quit()
-        print(f"[EMAIL] Email başarıyla gönderildi")
+        print("[EMAIL] Email başarıyla gönderildi")
 
         return {
             "success": True,

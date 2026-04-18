@@ -30,6 +30,11 @@ class SystemSettings(Base):
     vat_rates_json: Mapped[str] = mapped_column(
         Text, default="[1,10,20]", nullable=False
     )
+    public_pricing_json: Mapped[str] = mapped_column(
+        Text,
+        default='{"strategic_partner":{"plans":[]},"supplier":{"plans":[]}}',
+        nullable=False,
+    )
 
     # Audit
     created_at: Mapped[datetime] = mapped_column(

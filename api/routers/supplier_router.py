@@ -4,6 +4,7 @@ import logging
 import os
 import uuid
 import smtplib
+from decimal import Decimal
 from html import escape
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
@@ -11,23 +12,36 @@ from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
-    status,
     Body,
     UploadFile,
     File,
     Form,
 )
 from fastapi.responses import FileResponse
-from sqlalchemy import text
+from sqlalchemy import or_, text
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import secrets
 
-logger = logging.getLogger(__name__)
-
 from api.database import get_db
-from api.models import Supplier, SupplierUser, User, ProjectSupplier, Project
+from api.core.authz import (
+    GLOBAL_PROCUREMENT_MANAGER_ROLES,
+    is_admin_like,
+    is_global_procurement_manager,
+    normalized_role,
+    normalized_system_role,
+)
+from api.models import (
+    Supplier,
+    SupplierUser,
+    User,
+    ProjectSupplier,
+    Project,
+    Quote,
+    SupplierQuote,
+    ProjectFile,
+)
 from api.models.report import Contract
 from api.schemas.supplier import (
     SupplierCreate,
@@ -40,12 +54,34 @@ from api.core.deps import get_current_user, get_current_supplier_user
 from api.core.security import get_password_hash
 from api.services.email_service import get_email_service
 from api.services.sms_service import get_sms_service
+from api.services.subscription_service import enforce_active_private_supplier_limit
+from api.models.tenant import Tenant
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/suppliers", tags=["suppliers"])
 
 
+def _can_bypass_supplier_scope(current_user: User) -> bool:
+    return normalized_system_role(current_user) == "super_admin"
+
+
+def _is_global_supplier_manager(current_user: User) -> bool:
+    return is_global_procurement_manager(current_user)
+
+
 def _is_postgresql(db: Session) -> bool:
-    return getattr(getattr(db, "bind", None), "dialect", None).name == "postgresql"
+    bind = getattr(db, "bind", None)
+    dialect = getattr(bind, "dialect", None)
+    return getattr(dialect, "name", None) == "postgresql"
+
+
+def _num_to_float(value: object | None) -> float:
+    if value is None:
+        return 0.0
+    if isinstance(value, (int, float, Decimal, str)):
+        return float(value)
+    return 0.0
 
 
 def _ensure_supplier_default_user_table(db: Session) -> None:
@@ -116,6 +152,134 @@ def _set_default_user_id(db: Session, supplier_id: int, supplier_user_id: int) -
 # ============ SUPPLIER CRUD ============
 
 
+def _current_tenant_id(current_user: User) -> int | None:
+    return getattr(current_user, "tenant_id", None)
+
+
+def _current_tenant(db: Session, current_user: User) -> Tenant | None:
+    tenant_id = _current_tenant_id(current_user)
+    if tenant_id is None:
+        return None
+    return db.query(Tenant).filter(Tenant.id == tenant_id).first()
+
+
+def _require_private_supplier_tenant_scope(current_user: User) -> None:
+    if _current_tenant_id(current_user) is not None or _can_bypass_supplier_scope(
+        current_user
+    ):
+        return
+
+    if normalized_system_role(current_user) in {
+        "tenant_owner",
+        "tenant_admin",
+        "tenant_member",
+    }:
+        raise HTTPException(
+            status_code=400,
+            detail="Tenant kapsamı olmayan kullanıcı private tedarikçi oluşturamaz. Önce tenant bootstrap akışını tamamlayın.",
+        )
+
+
+def _ensure_supplier_scope(
+    supplier: Supplier,
+    current_user: User,
+    *,
+    detail: str = "Bu tedarikci üzerinde yetkiniz yok",
+) -> None:
+    if _can_bypass_supplier_scope(current_user):
+        return
+
+    tenant_id = _current_tenant_id(current_user)
+    if tenant_id is not None and supplier.tenant_id != tenant_id:
+        raise HTTPException(status_code=403, detail=detail)
+
+    if (
+        tenant_id is None
+        and supplier.created_by_id
+        and supplier.created_by_id != current_user.id
+    ):
+        raise HTTPException(status_code=403, detail=detail)
+
+
+def _ensure_supplier_creator_access(
+    supplier: Supplier,
+    current_user: User,
+    *,
+    detail: str,
+) -> None:
+    if _can_bypass_supplier_scope(current_user):
+        return
+
+    if supplier.created_by_id and supplier.created_by_id != current_user.id:
+        raise HTTPException(status_code=403, detail=detail)
+
+
+def _apply_supplier_visibility_filter(
+    query,
+    current_user: User,
+    *,
+    allow_global_manager_unscoped: bool = False,
+    source_type: str | None = None,
+):
+    tenant_id = _current_tenant_id(current_user)
+    normalized_source_type = (source_type or "").strip().lower() or None
+
+    if normalized_source_type == "platform_network":
+        return query.filter(Supplier.tenant_id.is_(None))
+
+    if tenant_id is not None:
+        if normalized_source_type == "all":
+            return query.filter(
+                or_(Supplier.tenant_id == tenant_id, Supplier.tenant_id.is_(None))
+            )
+        return query.filter(Supplier.tenant_id == tenant_id)
+
+    if allow_global_manager_unscoped and is_global_procurement_manager(current_user):
+        if normalized_source_type == "private":
+            return query.filter(Supplier.tenant_id.is_not(None))
+        return query
+
+    if normalized_source_type == "private":
+        return query.filter(
+            Supplier.created_by_id == current_user.id,
+            Supplier.tenant_id.is_(None),
+        )
+
+    return query.filter(Supplier.created_by_id == current_user.id)
+
+
+def _get_visible_supplier_or_404(
+    db: Session,
+    supplier_id: int,
+    current_user: User,
+    *,
+    detail: str = "Bu tedarikciyi kullanma yetkiniz yok",
+    allow_platform_network_for_tenant: bool = False,
+) -> Supplier:
+    supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Tedarikçi bulunamadı")
+
+    if _can_bypass_supplier_scope(current_user):
+        return supplier
+
+    tenant_id = _current_tenant_id(current_user)
+    if tenant_id is not None:
+        if supplier.tenant_id == tenant_id:
+            return supplier
+        if allow_platform_network_for_tenant and supplier.tenant_id is None:
+            return supplier
+        raise HTTPException(status_code=403, detail=detail)
+
+    if is_global_procurement_manager(current_user):
+        return supplier
+
+    if supplier.created_by_id and supplier.created_by_id == current_user.id:
+        return supplier
+
+    raise HTTPException(status_code=403, detail=detail)
+
+
 @router.post("", response_model=SupplierOut)
 def create_supplier(
     supplier_data: SupplierCreate,
@@ -128,7 +292,15 @@ def create_supplier(
     if existing:
         raise HTTPException(status_code=400, detail="Bu e-mail zaten kayıtlı")
 
-    supplier = Supplier(created_by_id=current_user.id, **supplier_data.model_dump())
+    _require_private_supplier_tenant_scope(current_user)
+
+    enforce_active_private_supplier_limit(db, _current_tenant(db, current_user))
+
+    supplier = Supplier(
+        created_by_id=current_user.id,
+        tenant_id=_current_tenant_id(current_user),
+        **supplier_data.model_dump(),
+    )
 
     db.add(supplier)
     db.commit()
@@ -141,15 +313,22 @@ def list_suppliers(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     filter_active: bool = True,
+    source_type: str | None = None,
 ):
     """Tedarikçileri listele (Personel tarafından girilen)"""
     try:
         query = db.query(Supplier)
 
         if filter_active:
-            query = query.filter(Supplier.is_active == True)
+            query = query.filter(Supplier.is_active)
 
-        # Sadece ekleyen ve yetkili kişiler görebilsin (TODO: Sonra permission ekle)
+        query = _apply_supplier_visibility_filter(
+            query,
+            current_user,
+            allow_global_manager_unscoped=True,
+            source_type=source_type,
+        )
+
         suppliers = query.order_by(Supplier.company_name).all()
         return suppliers
     except Exception as e:
@@ -172,6 +351,9 @@ def get_supplier(
     supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
     if not supplier:
         raise HTTPException(status_code=404, detail="Tedarikçi bulunamadı")
+    _ensure_supplier_scope(
+        supplier, current_user, detail="Bu tedarikciyi goruntuleme yetkiniz yok"
+    )
     return supplier
 
 
@@ -187,13 +369,9 @@ def update_supplier(
     if not supplier:
         raise HTTPException(status_code=404, detail="Tedarikçi bulunamadı")
 
-    # Sadece ekleyen kişi veya super admin güncelleyebilsin
-    # created_by_id null ise super admin güncelleyebilir
-    if current_user.role != "super_admin":
-        if supplier.created_by_id and supplier.created_by_id != current_user.id:
-            raise HTTPException(
-                status_code=403, detail="Sadece ekleyen kişi güncelleyebilir"
-            )
+    _ensure_supplier_scope(
+        supplier, current_user, detail="Bu tedarikciyi guncelleme yetkiniz yok"
+    )
 
     # Email unique kontrol (email değiştirilirse)
     if supplier_data.email and supplier_data.email != supplier.email:
@@ -228,8 +406,9 @@ def delete_supplier(
     if not supplier:
         raise HTTPException(status_code=404, detail="Tedarikçi bulunamadı")
 
-    if supplier.created_by_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Sadece ekleyen kişi silebilir")
+    _ensure_supplier_scope(
+        supplier, current_user, detail="Bu tedarikciyi silme yetkiniz yok"
+    )
 
     supplier.is_active = False
     db.commit()
@@ -250,11 +429,9 @@ def get_supplier_management_detail(
     if not supplier:
         raise HTTPException(status_code=404, detail="Tedarikçi bulunamadı")
 
-    if current_user.role != "super_admin":
-        if supplier.created_by_id and supplier.created_by_id != current_user.id:
-            raise HTTPException(
-                status_code=403, detail="Bu tedarikçiyi görüntüleme yetkiniz yok"
-            )
+    _ensure_supplier_scope(
+        supplier, current_user, detail="Bu tedarikciyi goruntuleme yetkiniz yok"
+    )
 
     payment_payload = _get_supplier_payment_payload(db, supplier.id)
     default_user_id = _get_default_user_id(db, supplier.id)
@@ -262,7 +439,7 @@ def get_supplier_management_detail(
         db.query(SupplierUser)
         .filter(
             SupplierUser.supplier_id == supplier.id,
-            SupplierUser.is_active == True,
+            SupplierUser.is_active,
         )
         .order_by(SupplierUser.id.asc())
         .all()
@@ -357,11 +534,9 @@ def update_supplier_management_detail(
     if not supplier:
         raise HTTPException(status_code=404, detail="Tedarikçi bulunamadı")
 
-    if current_user.role != "super_admin":
-        if supplier.created_by_id and supplier.created_by_id != current_user.id:
-            raise HTTPException(
-                status_code=403, detail="Bu tedarikçiyi güncelleme yetkiniz yok"
-            )
+    _ensure_supplier_scope(
+        supplier, current_user, detail="Bu tedarikciyi guncelleme yetkiniz yok"
+    )
 
     next_email = payload.get("email")
     if (
@@ -501,11 +676,11 @@ def create_supplier_guarantee(
     if not supplier:
         raise HTTPException(status_code=404, detail="Tedarikçi bulunamadı")
 
-    if current_user.role != "super_admin":
-        if supplier.created_by_id and supplier.created_by_id != current_user.id:
-            raise HTTPException(
-                status_code=403, detail="Bu tedarikçi için teminat ekleme yetkiniz yok"
-            )
+    _ensure_supplier_creator_access(
+        supplier,
+        current_user,
+        detail="Bu tedarikçi için teminat ekleme yetkiniz yok",
+    )
 
     title = str(payload.get("title") or "").strip()
     guarantee_type = str(payload.get("guarantee_type") or "").strip()
@@ -551,11 +726,11 @@ def delete_supplier_guarantee(
     if not supplier:
         raise HTTPException(status_code=404, detail="Tedarikçi bulunamadı")
 
-    if current_user.role != "super_admin":
-        if supplier.created_by_id and supplier.created_by_id != current_user.id:
-            raise HTTPException(
-                status_code=403, detail="Bu tedarikçi için teminat silme yetkiniz yok"
-            )
+    _ensure_supplier_creator_access(
+        supplier,
+        current_user,
+        detail="Bu tedarikçi için teminat silme yetkiniz yok",
+    )
 
     _ensure_supplier_guarantees_table(db)
     db.execute(
@@ -582,12 +757,11 @@ def update_supplier_guarantee(
     if not supplier:
         raise HTTPException(status_code=404, detail="Tedarikçi bulunamadı")
 
-    if current_user.role != "super_admin":
-        if supplier.created_by_id and supplier.created_by_id != current_user.id:
-            raise HTTPException(
-                status_code=403,
-                detail="Bu tedarikçi için teminat güncelleme yetkiniz yok",
-            )
+    _ensure_supplier_creator_access(
+        supplier,
+        current_user,
+        detail="Bu tedarikçi için teminat güncelleme yetkiniz yok",
+    )
 
     _ensure_supplier_guarantees_table(db)
     row = (
@@ -668,16 +842,16 @@ def create_supplier_user(
 
     # Sadece ekleyen kişi veya super admin kullanıcı ekleyebilsin
     # created_by_id null ise super admin ekleyebilir
-    if current_user.role != "super_admin":
-        if supplier.created_by_id and supplier.created_by_id != current_user.id:
-            raise HTTPException(
-                status_code=403, detail="Sadece ekleyen kişi kullanıcı ekleyebilir"
-            )
+    _ensure_supplier_creator_access(
+        supplier,
+        current_user,
+        detail="Sadece ekleyen kişi kullanıcı ekleyebilir",
+    )
 
     # Email benzersizliği (sadece aktif kullanıcılar kontrol edilecek)
     existing = (
         db.query(SupplierUser)
-        .filter(SupplierUser.email == user_data.email, SupplierUser.is_active == True)
+        .filter(SupplierUser.email == user_data.email, SupplierUser.is_active)
         .first()
     )
     if existing:
@@ -725,6 +899,7 @@ def create_supplier_user(
             supplier_user_name=supplier_user.name,
             magic_token=magic_token,
             company_name="ProcureFlow",
+            owner_user_id=supplier.created_by_id,
         )
         if email_sent:
             print(
@@ -791,11 +966,11 @@ def update_supplier_user(
         raise HTTPException(status_code=400, detail="Varsayılan yetkili değiştirilemez")
 
     # Sadece ekleyen kişi veya super admin güncelleyebilsin
-    if current_user.role != "super_admin":
-        if supplier.created_by_id and supplier.created_by_id != current_user.id:
-            raise HTTPException(
-                status_code=403, detail="Sadece ekleyen kişi güncelleyebilir"
-            )
+    _ensure_supplier_creator_access(
+        supplier,
+        current_user,
+        detail="Sadece ekleyen kişi güncelleyebilir",
+    )
 
     # Email unique kontrol (email değiştirilirse, sadece aktif kullanıcılar)
     if user_data.email and user_data.email != supplier_user.email:
@@ -804,7 +979,7 @@ def update_supplier_user(
             .filter(
                 SupplierUser.email == user_data.email,
                 SupplierUser.id != user_id,
-                SupplierUser.is_active == True,
+                SupplierUser.is_active,
             )
             .first()
         )
@@ -877,19 +1052,18 @@ def set_default_supplier_user(
     if not supplier:
         raise HTTPException(status_code=404, detail="Tedarikçi bulunamadı")
 
-    if current_user.role != "super_admin":
-        if supplier.created_by_id and supplier.created_by_id != current_user.id:
-            raise HTTPException(
-                status_code=403,
-                detail="Varsayılan yetkiliyi sadece admin belirleyebilir",
-            )
+    _ensure_supplier_creator_access(
+        supplier,
+        current_user,
+        detail="Varsayılan yetkiliyi sadece admin belirleyebilir",
+    )
 
     supplier_user = (
         db.query(SupplierUser)
         .filter(
             SupplierUser.id == user_id,
             SupplierUser.supplier_id == supplier_id,
-            SupplierUser.is_active == True,
+            SupplierUser.is_active,
         )
         .first()
     )
@@ -916,21 +1090,22 @@ def add_suppliers_to_project(
     email_service=Depends(get_email_service),
 ):
     """Projeye tedarikçileri ekle ve davet maileri gönder"""
-    print(f"\n[ENDPOINT] add_suppliers_to_project called")
+    print("\n[ENDPOINT] add_suppliers_to_project called")
     print(f"[ENDPOINT] project_id={project_id}, supplier_ids={supplier_ids}")
     print(f"[ENDPOINT] email_service={email_service}, type={type(email_service)}")
-    print(f"[ENDPOINT] current_user.role={current_user.role}")
+    current_role = normalized_role(current_user)
+    print(f"[ENDPOINT] current_user.role={current_role}")
 
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Proje bulunamadı")
 
-    # Yetki kontrol: Super Admin, Admin veya Satınalma Direktörü
-    admin_roles = ["super_admin", "admin", "satinalma_direktoru"]
-    if current_user.role not in admin_roles:
+    # Yetki kontrol: global rol veya projeye atanmış satın alma sorumlusu
+    is_project_member = any(p.id == project_id for p in current_user.projects)
+    if not _is_global_supplier_manager(current_user) and not is_project_member:
         raise HTTPException(
             status_code=403,
-            detail=f"Yetkiniz yok. Gerekli rol: {', '.join(admin_roles)}. Mevcut rol: {current_user.role}",
+            detail=f"Yetkiniz yok. Gerekli rol: {', '.join(sorted(GLOBAL_PROCUREMENT_MANAGER_ROLES))}. Mevcut rol: {current_role}",
         )
 
     assigned_count = 0
@@ -945,10 +1120,13 @@ def add_suppliers_to_project(
 
     for supplier_id in supplier_ids:
         print(f"[ENDPOINT] Processing supplier_id={supplier_id}")
-        supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
-        if not supplier:
-            print(f"[ENDPOINT] Supplier {supplier_id} not found")
-            continue
+        supplier = _get_visible_supplier_or_404(
+            db,
+            supplier_id,
+            current_user,
+            detail="Bu tedarikciyi projeye ekleme yetkiniz yok",
+            allow_platform_network_for_tenant=True,
+        )
 
         print(f"[ENDPOINT] Found supplier: {supplier.company_name} ({supplier.email})")
 
@@ -979,7 +1157,7 @@ def add_suppliers_to_project(
         else:
             # Zaten atanmış, ama tekrar davet gönderebiliriz
             print(
-                f"[ENDPOINT] Supplier already assigned to project - will resend invitation"
+                "[ENDPOINT] Supplier already assigned to project - will resend invitation"
             )
             project_supplier = existing
 
@@ -1015,7 +1193,7 @@ def add_suppliers_to_project(
                 # Continue anyway, email server might still work
         else:
             # User zaten var - magic token'ı refresh edelim (tekrar davet için)
-            print(f"[ENDPOINT] SupplierUser exists - refreshing magic token")
+            print("[ENDPOINT] SupplierUser exists - refreshing magic token")
             if not supplier_user.password_set:
                 # Henüz password set etmemiş, token'ı yenile
                 magic_token = secrets.token_urlsafe(32)
@@ -1025,12 +1203,10 @@ def add_suppliers_to_project(
                 ) + timedelta(hours=24)
                 db.commit()
                 db.refresh(supplier_user)
-                print(f"[ENDPOINT] ✓ Magic token refreshed")
+                print("[ENDPOINT] ✓ Magic token refreshed")
             else:
                 # Password set edilmiş - tekrar davet yollanamazız
-                print(
-                    f"[ENDPOINT] ⚠️  User already registered, cannot resend magic link"
-                )
+                print("[ENDPOINT] ⚠️  User already registered, cannot resend magic link")
 
         # STEP 3: Email gönder (şifre durumuna göre different email)
         try:
@@ -1039,19 +1215,20 @@ def add_suppliers_to_project(
             # Şifre set edilmiş mi kontrol et
             if not supplier_user.password_set:
                 # Password set edilmemiş - magic link gönder
-                print(f"[EMAIL] Password not set - sending magic link email")
+                print("[EMAIL] Password not set - sending magic link email")
                 result = email_service.send_magic_link(
                     to_email=supplier_user.email,
                     supplier_name=supplier.company_name,
                     supplier_user_name=supplier_user.name,
                     magic_token=supplier_user.magic_token,
                     company_name="ProcureFlow",
+                    owner_user_id=supplier.created_by_id,
                 )
                 email_type = "📝 Magic Link (Registration)"
             else:
                 # Password set edilmiş - normal davet gönder
                 print(
-                    f"[EMAIL] Password already set - sending normal project invitation"
+                    "[EMAIL] Password already set - sending normal project invitation"
                 )
                 result = email_service.send_project_invitation(
                     to_email=supplier.email,
@@ -1112,9 +1289,8 @@ def get_project_suppliers(
         raise HTTPException(status_code=404, detail="Proje bulunamadı")
 
     # Yetki kontrol
-    admin_roles = {"super_admin", "admin", "satinalma_direktoru"}
     is_project_member = any(p.id == project_id for p in current_user.projects)
-    if current_user.role not in admin_roles and not is_project_member:
+    if not _is_global_supplier_manager(current_user) and not is_project_member:
         raise HTTPException(status_code=403, detail="Yetkiniz yok")
 
     project_suppliers = (
@@ -1129,6 +1305,7 @@ def get_project_suppliers(
                 "supplier_id": ps.supplier_id,
                 "supplier_name": ps.supplier.company_name,
                 "supplier_email": ps.supplier.email,
+                "source_type": ps.supplier.source_type,
                 "category": ps.supplier.category,
                 "is_active": ps.is_active,
                 "invitation_sent": ps.invitation_sent,
@@ -1157,9 +1334,8 @@ def remove_supplier_from_project(
         raise HTTPException(status_code=404, detail="Atama bulunamadı")
 
     project = project_supplier.project
-    admin_roles = {"super_admin", "admin", "satinalma_direktoru"}
     is_project_member = any(p.id == project.id for p in current_user.projects)
-    if current_user.role not in admin_roles and not is_project_member:
+    if not _is_global_supplier_manager(current_user) and not is_project_member:
         raise HTTPException(status_code=403, detail="Yetkiniz yok")
 
     db.delete(project_supplier)
@@ -1182,14 +1358,18 @@ def resend_supplier_invitation(
     if not project:
         raise HTTPException(status_code=404, detail="Proje bulunamadı")
 
-    supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
-    if not supplier:
-        raise HTTPException(status_code=404, detail="Tedarikçi bulunamadı")
-
     # Yetki kontrol
-    admin_roles = ["super_admin", "admin", "satinalma_direktoru"]
-    if current_user.role not in admin_roles:
+    is_project_member = any(p.id == project_id for p in current_user.projects)
+    if not _is_global_supplier_manager(current_user) and not is_project_member:
         raise HTTPException(status_code=403, detail="Yetkiniz yok")
+
+    supplier = _get_visible_supplier_or_404(
+        db,
+        supplier_id,
+        current_user,
+        detail="Bu tedarikciye davetiye yeniden gonderme yetkiniz yok",
+        allow_platform_network_for_tenant=True,
+    )
 
     # ProjectSupplier kaydı var mı?
     project_supplier = (
@@ -1200,7 +1380,6 @@ def resend_supplier_invitation(
         )
         .first()
     )
-
     if not project_supplier:
         raise HTTPException(status_code=404, detail="Bu tedarikçi bu projeye atanmamış")
 
@@ -1235,10 +1414,11 @@ def resend_supplier_invitation(
             supplier_user_name=supplier_user.name,
             magic_token=magic_token,
             company_name="ProcureFlow",
+            owner_user_id=supplier.created_by_id,
         )
     else:
         # Password set edilmiş - normal project invitation gönder
-        print(f"[RESEND] User already registered - sending project invitation")
+        print("[RESEND] User already registered - sending project invitation")
         email_type = "📧 Project Invitation"
         result = email_service.send_project_invitation(
             to_email=supplier.email,
@@ -1365,16 +1545,12 @@ def get_supplier_dashboard_projects(
     db: Session = Depends(get_db),
 ):
     """Tedarikçi paneli - atanmış projeleri getir"""
-    from api.models import SupplierQuote, Quote
-
-    # Supplier user zaten authenticate edilmiş, supplier_id ve supplier_user_id var
-
     # Bu tedarikçiye atanmış projeleri getir
     project_suppliers = (
         db.query(ProjectSupplier)
         .filter(
             ProjectSupplier.supplier_id == supplier_user.supplier_id,
-            ProjectSupplier.is_active == True,
+            ProjectSupplier.is_active,
         )
         .all()
     )
@@ -1383,26 +1559,75 @@ def get_supplier_dashboard_projects(
     for ps in project_suppliers:
         project = ps.project
 
-        # Bu projede bu tedarikçinin teklifi var mı?
-        quote = (
+        supplier_quotes = (
             db.query(SupplierQuote)
+            .join(Quote, Quote.id == SupplierQuote.quote_id)
             .filter(
                 SupplierQuote.supplier_id == supplier_user.supplier_id,
-                SupplierQuote.quote_id.in_(
-                    db.query(Quote.id).filter(Quote.project_id == project.id)
-                ),
+                Quote.project_id == project.id,
             )
-            .first()
+            .order_by(Quote.created_at.desc(), SupplierQuote.created_at.desc())
+            .all()
         )
+
+        latest_supplier_quote = supplier_quotes[0] if supplier_quotes else None
+        latest_quote = latest_supplier_quote.quote if latest_supplier_quote else None
+
+        project_files = (
+            db.query(ProjectFile)
+            .filter(ProjectFile.project_id == project.id)
+            .order_by(ProjectFile.created_at.desc())
+            .all()
+        )
+
+        company = project.company
 
         projects.append(
             {
                 "id": project.id,
                 "name": project.name,
                 "description": project.description,
-                "budget": float(project.budget) if project.budget else None,
                 "status": "active" if project.is_active else "inactive",
-                "quote_submitted": quote is not None,
+                "company": {
+                    "id": company.id if company else None,
+                    "name": company.name if company else "Firma bilgisi yok",
+                    "logo_url": company.logo_url if company else None,
+                },
+                "quote": {
+                    "id": latest_quote.id if latest_quote else None,
+                    "title": latest_quote.title
+                    if latest_quote
+                    else "Teklif henüz oluşturulmadı",
+                    "description": latest_quote.description if latest_quote else None,
+                    "status": (
+                        latest_quote.status.value
+                        if latest_quote
+                        and getattr(latest_quote, "status", None) is not None
+                        and hasattr(latest_quote.status, "value")
+                        else None
+                    ),
+                },
+                "supplier_quote": {
+                    "id": latest_supplier_quote.id if latest_supplier_quote else None,
+                    "status": latest_supplier_quote.status
+                    if latest_supplier_quote
+                    else None,
+                    "submitted": bool(
+                        latest_supplier_quote
+                        and str(latest_supplier_quote.status or "").lower()
+                        == "yanıtlandı"
+                    ),
+                },
+                "project_files": [
+                    {
+                        "id": f.id,
+                        "name": f.original_filename,
+                        "size": int(f.file_size or 0),
+                        "file_type": f.file_type,
+                    }
+                    for f in project_files
+                ],
+                "quote_submitted": latest_supplier_quote is not None,
                 "assigned_at": ps.assigned_at,
             }
         )
@@ -1678,6 +1903,7 @@ def _notify_expired_guarantees(
                 quote_title=subject_title,
                 deadline=deadline_text,
                 quote_url=f"{email_service.app_url}/supplier/workspace?tab=guarantees",
+                owner_user_id=getattr(admin_user, "id", None),
             )
         if admin_user and admin_user.email:
             email_service.send_quote_notification(
@@ -1686,16 +1912,18 @@ def _notify_expired_guarantees(
                 quote_title=f"Teminat Süresi Doldu - {subject_title}",
                 deadline=deadline_text,
                 quote_url=f"{email_service.app_url}/admin",
+                owner_user_id=admin_user.id,
             )
 
         if supplier and getattr(sms_service, "enabled", False):
             sms_text = f"{supplier.company_name} teminat suresi doldu: {subject_title} ({deadline_text})"
-            sms_targets = [supplier.phone]
-            if admin_user:
-                sms_targets.append(getattr(admin_user, "phone", None))
+            sms_targets: list[str] = []
+            if supplier.phone:
+                sms_targets.append(supplier.phone)
+            if admin_user and getattr(admin_user, "phone", None):
+                sms_targets.append(str(admin_user.phone))
             for target in sms_targets:
-                if target:
-                    sms_service.send_sms(target, sms_text)
+                sms_service.send_sms(target, sms_text)
 
         db.execute(
             text("""
@@ -1726,7 +1954,7 @@ def get_supplier_profile(
         db.query(SupplierUser)
         .filter(
             SupplierUser.supplier_id == supplier.id,
-            SupplierUser.is_active == True,
+            SupplierUser.is_active,
         )
         .order_by(SupplierUser.id.asc())
         .all()
@@ -1820,7 +2048,7 @@ def update_supplier_profile(
 
     # SupplierUser bilgileri güncelle (name, phone)
     if "user_name" in update_data and update_data.get("user_name") is not None:
-        supplier_user.name = update_data.get("user_name")
+        supplier_user.name = str(update_data.get("user_name"))
     if "user_phone" in update_data and update_data.get("user_phone") is not None:
         supplier_user.phone = update_data.get("user_phone")
 
@@ -1931,7 +2159,7 @@ def update_supplier_profile_user(
         .filter(
             SupplierUser.id == user_id,
             SupplierUser.supplier_id == supplier_user.supplier_id,
-            SupplierUser.is_active == True,
+            SupplierUser.is_active,
         )
         .first()
     )
@@ -1951,7 +2179,7 @@ def update_supplier_profile_user(
         .filter(
             SupplierUser.email == next_email,
             SupplierUser.id != target_user.id,
-            SupplierUser.is_active == True,
+            SupplierUser.is_active,
         )
         .first()
     )
@@ -1990,7 +2218,7 @@ def delete_supplier_profile_user(
         .filter(
             SupplierUser.id == user_id,
             SupplierUser.supplier_id == supplier_user.supplier_id,
-            SupplierUser.is_active == True,
+            SupplierUser.is_active,
         )
         .first()
     )
@@ -2216,12 +2444,11 @@ def list_supplier_documents_admin(
     if not supplier:
         raise HTTPException(status_code=404, detail="Tedarikçi bulunamadı")
 
-    if current_user.role != "super_admin":
-        if supplier.created_by_id and supplier.created_by_id != current_user.id:
-            raise HTTPException(
-                status_code=403,
-                detail="Bu tedarikçi dokümanlarını görüntüleme yetkiniz yok",
-            )
+    _ensure_supplier_creator_access(
+        supplier,
+        current_user,
+        detail="Bu tedarikçi dokümanlarını görüntüleme yetkiniz yok",
+    )
 
     _ensure_supplier_documents_table(db)
     sql = """
@@ -2253,11 +2480,11 @@ async def upload_supplier_document_admin(
     if not supplier:
         raise HTTPException(status_code=404, detail="Tedarikçi bulunamadı")
 
-    if current_user.role != "super_admin":
-        if supplier.created_by_id and supplier.created_by_id != current_user.id:
-            raise HTTPException(
-                status_code=403, detail="Bu tedarikçi için doküman yükleme yetkiniz yok"
-            )
+    _ensure_supplier_creator_access(
+        supplier,
+        current_user,
+        detail="Bu tedarikçi için doküman yükleme yetkiniz yok",
+    )
 
     allowed_categories = {
         "certificates",
@@ -2347,11 +2574,11 @@ def delete_supplier_document_admin(
     if not supplier:
         raise HTTPException(status_code=404, detail="Tedarikçi bulunamadı")
 
-    if current_user.role != "super_admin":
-        if supplier.created_by_id and supplier.created_by_id != current_user.id:
-            raise HTTPException(
-                status_code=403, detail="Bu tedarikçi dokümanlarını silme yetkiniz yok"
-            )
+    _ensure_supplier_creator_access(
+        supplier,
+        current_user,
+        detail="Bu tedarikçi dokümanlarını silme yetkiniz yok",
+    )
 
     _ensure_supplier_documents_table(db)
     doc = (
@@ -2398,61 +2625,20 @@ async def send_supplier_contact_email_admin(
     attachments: list[UploadFile] | None = File(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    email_service=Depends(get_email_service),
 ):
     """Admin panelinden tedarikçiye e-posta gönder (opsiyonel eklerle)."""
     supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
     if not supplier:
         raise HTTPException(status_code=404, detail="Tedarikçi bulunamadı")
 
-    if current_user.role != "super_admin":
-        if supplier.created_by_id and supplier.created_by_id != current_user.id:
-            raise HTTPException(
-                status_code=403,
-                detail="Bu tedarikçi için e-posta gönderme yetkiniz yok",
-            )
-
-    smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-    smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    sender_email = os.getenv("SENDER_EMAIL", "noreply@procureflow.local")
-    sender_password = os.getenv("SENDER_PASSWORD", "")
-    use_tls = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
-
-    if not sender_email or not sender_password:
-        raise HTTPException(
-            status_code=500,
-            detail="SMTP ayarları eksik, lütfen yöneticinizle iletişime geçin",
-        )
-
-    cleaned_subject = " ".join((subject or "").split()) or "Bilgilendirme"
-    if not cleaned_subject.startswith("[ProcureFlow]"):
-        cleaned_subject = f"[ProcureFlow] {cleaned_subject}"
-
-    plain_body = (body or "").strip() or (
-        "Merhaba,\n\n"
-        "Bu ileti ProcureFlow sisteminden gonderilmistir.\n\n"
-        "Iyi calismalar."
-    )
-    html_body = (
-        '<html><body style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">'
-        + "<p>"
-        + escape(plain_body).replace("\n", "<br>")
-        + "</p>"
-        + "</body></html>"
+    _ensure_supplier_creator_access(
+        supplier,
+        current_user,
+        detail="Bu tedarikçi için e-posta gönderme yetkiniz yok",
     )
 
-    msg = EmailMessage()
-    msg["Subject"] = cleaned_subject
-    msg["From"] = f"ProcureFlow <{sender_email}>"
-    msg["To"] = to_email
-    if cc:
-        msg["Cc"] = cc
-    msg["Date"] = formatdate(localtime=True)
-    msg["Message-ID"] = make_msgid(domain=sender_email.split("@")[-1])
-    msg["X-Mailer"] = "ProcureFlow"
-    msg["Content-Language"] = "tr-TR"
-    msg.set_content(plain_body, subtype="plain", charset="utf-8")
-    msg.add_alternative(html_body, subtype="html", charset="utf-8")
-
+    payload_attachments: list[tuple[str, str, bytes]] = []
     total_size = 0
     for upload in attachments or []:
         content = await upload.read()
@@ -2461,31 +2647,19 @@ async def send_supplier_contact_email_admin(
             raise HTTPException(
                 status_code=400, detail="Toplam ek boyutu 20MB sınırını aşamaz"
             )
-
         filename = (upload.filename or "ek").strip() or "ek"
         content_type = upload.content_type or "application/octet-stream"
-        maintype, subtype = (content_type.split("/", 1) + ["octet-stream"])[:2]
-        msg.add_attachment(
-            content, maintype=maintype, subtype=subtype, filename=filename
-        )
+        payload_attachments.append((filename, content_type, content))
 
-    recipients = [to_email]
-    if cc:
-        recipients.extend([r.strip() for r in cc.split(",") if r.strip()])
-
-    try:
-        if smtp_port == 465:
-            server = smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=12)
-        else:
-            server = smtplib.SMTP(smtp_server, smtp_port, timeout=12)
-            if use_tls:
-                server.starttls()
-        server.login(sender_email, sender_password)
-        server.send_message(msg, from_addr=sender_email, to_addrs=recipients)
-        server.quit()
-    except Exception as exc:
-        logger.exception("Tedarikçi e-postası gönderimi başarısız")
-        raise HTTPException(status_code=500, detail=f"E-posta gönderilemedi: {exc}")
+    email_sent = email_service.send_custom_email(
+        to_email=to_email,
+        subject=subject,
+        body=body,
+        cc=cc,
+        attachments=payload_attachments,
+    )
+    if not email_sent:
+        raise HTTPException(status_code=500, detail="E-posta gönderilemedi")
 
     return {"status": "success", "message": "E-posta gönderildi"}
 
@@ -2503,9 +2677,11 @@ def download_supplier_document_file_admin(
     if not supplier:
         raise HTTPException(status_code=404, detail="Tedarikçi bulunamadı")
 
-    if current_user.role != "super_admin":
-        if supplier.created_by_id and supplier.created_by_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Bu dosyaya erişim izniniz yok")
+    _ensure_supplier_creator_access(
+        supplier,
+        current_user,
+        detail="Bu dosyaya erişim izniniz yok",
+    )
 
     safe_name = os.path.basename(filename)
     file_path = os.path.join(
@@ -2556,7 +2732,7 @@ def list_supplier_contracts(
                 "quote_id": c.quote_id,
                 "contract_number": c.contract_number,
                 "status": c.status,
-                "final_amount": float(c.final_amount)
+                "final_amount": _num_to_float(c.final_amount)
                 if c.final_amount is not None
                 else None,
                 "created_at": c.created_at,
@@ -2731,7 +2907,7 @@ def _build_supplier_finance_summary(db: Session, supplier_id: int) -> dict:
         .all()
     )
 
-    contract_total = float(sum(float(c.final_amount or 0) for c in signed_contracts))
+    contract_total = sum(_num_to_float(c.final_amount) for c in signed_contracts)
     invoice_total = float(sum(float(r["amount"] or 0) for r in invoices))
     payment_total = float(sum(float(r["amount"] or 0) for r in payments))
 
@@ -2750,7 +2926,7 @@ def _build_supplier_finance_summary(db: Session, supplier_id: int) -> dict:
                 "quote_id": c.quote_id,
                 "contract_number": c.contract_number,
                 "status": c.status,
-                "final_amount": float(c.final_amount)
+                "final_amount": _num_to_float(c.final_amount)
                 if c.final_amount is not None
                 else 0,
                 "signed_at": c.signed_at,
@@ -2813,11 +2989,11 @@ def _require_supplier_access_for_finance(
     supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
     if not supplier:
         raise HTTPException(status_code=404, detail="Tedarikçi bulunamadı")
-    if current_user.role != "super_admin":
-        if supplier.created_by_id and supplier.created_by_id != current_user.id:
-            raise HTTPException(
-                status_code=403, detail="Bu tedarikçi için yetkiniz yok"
-            )
+    _ensure_supplier_creator_access(
+        supplier,
+        current_user,
+        detail="Bu tedarikçi için yetkiniz yok",
+    )
     return supplier
 
 
@@ -3495,9 +3671,10 @@ def list_finance_mismatches_for_dashboard(
     current_user: User = Depends(get_current_user),
 ):
     _ensure_supplier_finance_tables(db)
-    suppliers_q = db.query(Supplier).filter(Supplier.is_active == True)
-    if current_user.role != "super_admin":
-        suppliers_q = suppliers_q.filter(Supplier.created_by_id == current_user.id)
+    suppliers_q = _apply_supplier_visibility_filter(
+        db.query(Supplier).filter(Supplier.is_active),
+        current_user,
+    )
 
     suppliers = suppliers_q.order_by(Supplier.id.desc()).limit(200).all()
     rows: list[dict] = []
@@ -3625,7 +3802,7 @@ def request_supplier_email_change(
         .filter(
             SupplierUser.email == new_email_raw,
             SupplierUser.id != supplier_user.id,
-            SupplierUser.is_active == True,
+            SupplierUser.is_active,
         )
         .first()
     )
@@ -3738,7 +3915,7 @@ def confirm_supplier_email_change(
         .filter(
             SupplierUser.email == new_email,
             SupplierUser.id != supplier_user.id,
-            SupplierUser.is_active == True,
+            SupplierUser.is_active,
         )
         .first()
     )

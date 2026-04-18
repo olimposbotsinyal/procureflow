@@ -2,14 +2,17 @@
 import { Link, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { notify } from "../lib/notify";
-import { NAV_ITEMS } from "../config/navigation";
-import { hasPermission } from "../auth/permissions";
+import { getVisibleNavItems } from "../config/navigation";
+import { getRoleIcon, getUserDisplayRoleLabel, getWorkspaceLabelFallback, hasPermissionForUser, normalizedBusinessRole } from "../auth/permissions";
 import { useState } from "react";
 
 export default function AppLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const workspaceName = user?.organization_name || user?.platform_name || "Buyera Asistans";
+  const workspaceLabel = user?.workspace_label || getWorkspaceLabelFallback(user);
+  const logoUrl = user?.organization_logo_url;
 
   function handleLogout() {
     logout();
@@ -24,27 +27,43 @@ export default function AppLayout() {
   }
 
   const visibleItems = user
-    ? NAV_ITEMS.filter((item) => hasPermission(user.role, item.permission))
+    ? getVisibleNavItems(user).filter((item) => hasPermissionForUser(user, item.permission))
     : [];
+  const normalizedRole = normalizedBusinessRole(user);
+  const roleIcon = getRoleIcon(normalizedRole);
+  const roleLabel = getUserDisplayRoleLabel(user);
 
   return (
-    <div style={{ fontFamily: "Arial", minHeight: "100vh", background: "#f7f7f8" }}>
+    <div style={{ fontFamily: "Arial", minHeight: "100vh", background: "#f4f5f2" }}>
       <header
         style={{
-          height: 64,
-          background: "#111827",
+          minHeight: 76,
+          background: "linear-gradient(135deg, #112a25 0%, #173630 52%, #20463e 100%)",
           color: "#fff",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: "0 20px",
+          padding: "10px 22px",
           position: "relative",
+          boxShadow: "0 14px 30px rgba(15, 23, 42, 0.12)",
         }}
       >
         <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-          <strong>ProcureFlow</strong>
+          <div style={{ display: "flex", gap: 12, alignItems: "center", marginRight: 8 }}>
+            {logoUrl ? (
+              <img src={logoUrl} alt={workspaceName} style={{ width: 44, height: 44, borderRadius: 16, objectFit: "cover", border: "1px solid rgba(255,255,255,0.18)" }} />
+            ) : (
+              <div style={{ width: 44, height: 44, borderRadius: 16, display: "grid", placeItems: "center", background: "rgba(255,255,255,0.14)", fontWeight: 800 }}>
+                {workspaceName.slice(0, 2).toUpperCase()}
+              </div>
+            )}
+            <div>
+              <div style={{ fontSize: 17, fontWeight: 700 }}>{workspaceName}</div>
+              <div style={{ fontSize: 11, color: "#d6e1db", letterSpacing: 0.4 }}>{workspaceLabel} • {user?.platform_domain || "buyerasistans.com.tr"}</div>
+            </div>
+          </div>
           {visibleItems.map((item) => (
-            <Link key={item.to} to={item.to} style={{ color: "#d1d5db", textDecoration: "none" }}>
+            <Link key={item.to} to={item.to} style={{ color: "#d1d5db", textDecoration: "none", fontSize: 14 }}>
               {item.label}
             </Link>
           ))}
@@ -54,16 +73,16 @@ export default function AppLayout() {
           <button
             onClick={() => setMenuOpen(!menuOpen)}
             style={{
-              background: "#1f2937",
-              border: "1px solid #374151",
+              background: "rgba(255,255,255,0.08)",
+              border: "1px solid rgba(255,255,255,0.12)",
               color: "#d1d5db",
-              padding: "8px 12px",
-              borderRadius: 6,
+              padding: "10px 14px",
+              borderRadius: 14,
               cursor: "pointer",
               fontSize: 14,
             }}
           >
-            👤 {user?.email}
+            {roleIcon} {user?.full_name || user?.email}
           </button>
 
           {menuOpen && (
@@ -81,6 +100,9 @@ export default function AppLayout() {
               }}
             >
               <div style={{ padding: 8 }}>
+                <div style={{ padding: "8px 16px", fontSize: 12, color: "#6b7280", borderBottom: "1px solid #e5e7eb", marginBottom: 4 }}>
+                  {roleIcon} {roleLabel} • {user?.platform_name || "Buyera Asistans"}
+                </div>
                 <button
                   onClick={handleProfileClick}
                   style={{

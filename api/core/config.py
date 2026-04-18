@@ -10,7 +10,7 @@ DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_NAME = os.getenv("DB_NAME", "procureflow")
 DB_USER = os.getenv("DB_USER", "postgres")
-DB_PASS = os.getenv("DB_PASS", "")
+DB_PASS = os.getenv("DB_PASS", "96578097")
 REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 

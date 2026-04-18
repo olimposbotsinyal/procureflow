@@ -3,10 +3,11 @@ import { useNavigate } from "react-router-dom";
 import styled from "styled-components";
 import { supplierLoginRequest } from "../services/auth.service";
 import { isSupplierLoggedIn } from "../lib/session";
+import NavBar from "../components/NavBar";
 
 const Container = styled.div`
   display: flex;
-  min-height: 100vh;
+  min-height: calc(100vh - 60px);
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 `;
 
@@ -203,8 +204,9 @@ export default function SupplierLoginPage() {
     } catch (err: unknown) {
       console.error("Login error:", err);
       const errorMessage =
-        (err as any)?.message ||
-        "Giriş başarısız. Lütfen e-posta ve şifrenizi kontrol ediniz.";
+        err instanceof Error
+          ? err.message
+          : "Giriş başarısız. Lütfen e-posta ve şifrenizi kontrol ediniz.";
       setError({ message: errorMessage });
     } finally {
       setLoading(false);
@@ -212,9 +214,12 @@ export default function SupplierLoginPage() {
   };
 
   return (
-    <Container>
+    <div style={{ minHeight: "100vh" }}>
+      <NavBar variant="supplier" activePath="/supplier/login" />
+      <Container>
       <LeftSection>
         <div>
+          <img src="/brand/buyer-logo-custom.svg" alt="BUYER ASISTANS" style={{ height: 48, marginBottom: 24, filter: "brightness(0) invert(1)" }} />
           <h1>Tedarikçi Portalı</h1>
           <p>
             Tekliflerinizi yönetin, proje detaylarını görün ve sözleşmelerinizi
@@ -266,6 +271,7 @@ export default function SupplierLoginPage() {
           </Form>
         </FormContainer>
       </RightSection>
-    </Container>
+      </Container>
+    </div>
   );
 }
