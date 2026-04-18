@@ -31,7 +31,7 @@ class ProjectBase(BaseModel):
 
 
 class ProjectCreate(ProjectBase):
-    pass
+    responsible_user_ids: list[int] = []
 
 
 class ProjectUpdate(BaseModel):
@@ -48,6 +48,16 @@ class ProjectUpdate(BaseModel):
     manager_phone: str | None = None
     manager_email: str | None = None
     is_active: bool | None = None
+    responsible_user_ids: list[int] | None = None
+
+
+class ProjectPersonnelOut(BaseModel):
+    id: int
+    full_name: str
+    email: str
+    role: str
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ProjectOut(ProjectBase):
@@ -55,5 +65,6 @@ class ProjectOut(ProjectBase):
     created_at: datetime | None = None
     updated_at: datetime | None = None
     project_files: list[ProjectFileOut] = []
+    personnel: list[ProjectPersonnelOut] = []
 
     model_config = ConfigDict(from_attributes=True)

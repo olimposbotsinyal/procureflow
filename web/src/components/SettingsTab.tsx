@@ -5,12 +5,16 @@ import { AdvancedSettingsTab } from "./AdvancedSettingsTab";
 import { DemoDataTab } from "./DemoDataTab";
 import type { SettingsUpdatePayload } from "../services/settings.service";
 import { getQuotePriceRules, updateQuotePriceRules, type QuotePriceRules } from "../services/admin.service";
+import { useAuth } from "../hooks/useAuth";
+import { canManageTenantIdentitySettings } from "../auth/permissions";
 
 type TabType = "basic" | "advanced" | "demo" | "price_rules";
 
 export const SettingsTab: React.FC = () => {
+  const { user } = useAuth();
   const { settings, loading, error, updateSettings } = useSettings();
   const [activeTab, setActiveTab] = useState<TabType>("basic");
+  const canEditTenantIdentity = canManageTenantIdentitySettings(user);
   
   const [formData, setFormData] = useState({
     app_name: "",
@@ -132,6 +136,11 @@ export const SettingsTab: React.FC = () => {
         <p className="mt-1 text-sm text-gray-600">
           Uygulamanın ayarlarını yönetin
         </p>
+        {!canEditTenantIdentity && (
+          <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Bu alanda tenant kimliği ve temel ayarlar salt okunur gösterilir. Değişiklik yapmak için tenant owner veya super admin hesabı gerekir.
+          </div>
+        )}
       </div>
 
       {/* Tab Navigation */}
@@ -207,7 +216,7 @@ export const SettingsTab: React.FC = () => {
                 id="app_name"
                 value={formData.app_name}
                 onChange={handleInputChange}
-                disabled={saving}
+                disabled={saving || !canEditTenantIdentity}
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
                 placeholder="ProcureFlow"
               />
@@ -225,7 +234,7 @@ export const SettingsTab: React.FC = () => {
                   id="maintenance_mode"
                   checked={formData.maintenance_mode}
                   onChange={handleInputChange}
-                  disabled={saving}
+                  disabled={saving || !canEditTenantIdentity}
                   className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer disabled:opacity-60"
                 />
                 <label htmlFor="maintenance_mode" className="ml-2 block text-sm font-medium text-gray-700 cursor-pointer">
@@ -268,7 +277,7 @@ export const SettingsTab: React.FC = () => {
                       type="button"
                       onClick={() => setFormData((prev) => ({ ...prev, vat_rates: prev.vat_rates.filter((r) => r !== rate) }))}
                       className="text-red-600 font-bold"
-                      disabled={formData.vat_rates.length <= 1}
+                      disabled={formData.vat_rates.length <= 1 || !canEditTenantIdentity}
                       title="KDV oranını sil"
                     >
                       ×
@@ -283,11 +292,13 @@ export const SettingsTab: React.FC = () => {
                   step={0.01}
                   value={newVatRate}
                   onChange={(e) => setNewVatRate(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-md w-40"
+                  disabled={!canEditTenantIdentity}
+                  className="px-3 py-2 border border-gray-300 rounded-md w-40 disabled:bg-gray-100"
                   placeholder="Örn: 8"
                 />
                 <button
                   type="button"
+                  disabled={!canEditTenantIdentity}
                   onClick={() => {
                     const parsed = Number(newVatRate);
                     if (!Number.isFinite(parsed) || parsed < 0) return;
@@ -297,7 +308,7 @@ export const SettingsTab: React.FC = () => {
                     });
                     setNewVatRate("");
                   }}
-                  className="px-3 py-2 bg-blue-600 text-white rounded-md"
+                  className="px-3 py-2 bg-blue-600 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   KDV Ekle
                 </button>
@@ -311,14 +322,14 @@ export const SettingsTab: React.FC = () => {
             <div className="flex gap-3 pt-4 border-t">
               <button
                 type="submit"
-                disabled={saving || loading}
+                disabled={saving || loading || !canEditTenantIdentity}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
               >
                 {saving ? "Kaydediliyor..." : "Değişiklikleri Kaydet"}
               </button>
               <button
                 type="button"
-                disabled={saving || loading}
+                disabled={saving || loading || !canEditTenantIdentity}
                 onClick={() => {
                   if (settings) {
                     setFormData({

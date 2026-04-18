@@ -1,0 +1,67 @@
+{
+  "updated_count": 5,
+  "updated_users": [
+    {
+      "id": 1,
+      "email": "deleted-user-1-20260414164420@procureflow.local",
+      "role": "admin",
+      "old_system_role": "tenant_member",
+      "new_system_role": "tenant_admin",
+      "fixes": [
+        "set_system_role:tenant_admin"
+      ]
+    },
+    {
+      "id": 4,
+      "email": "superadmin@procureflow.com",
+      "role": "super_admin",
+      "old_system_role": "tenant_member",
+      "new_system_role": "super_admin",
+      "fixes": [
+        "set_system_role:super_admin"
+      ]
+    },
+    {
+      "id": 10,
+      "email": "deleted-user-10-20260414164316@procureflow.local",
+      "role": "admin",
+      "old_system_role": "tenant_member",
+      "new_system_role": "tenant_admin",
+      "fixes": [
+        "set_system_role:tenant_admin"
+      ]
+    },
+    {
+      "id": 17,
+      "email": "Serkaneryilmazz@gmail.com",
+      "role": "admin",
+      "old_system_role": "tenant_member",
+      "new_system_role": "tenant_admin",
+      "fixes": [
+        "set_system_role:tenant_admin"
+      ]
+    },
+    {
+      "id": 18,
+      "email": "test@example.com",
+      "role": "super_admin",
+      "old_system_role": "tenant_member",
+      "new_system_role": "super_admin",
+      "fixes": [
+        "set_system_role:super_admin"
+      ]
+    }
+  ],
+  "committed": false,
+  "summary": {
+    "target_system_role_counts": {
+      "super_admin": 2,
+      "tenant_admin": 3
+    },
+    "fix_type_counts": {
+      "set_system_role:super_admin": 2,
+      "set_system_role:tenant_admin": 3
+    },
+    "preview_rows": 5
+  }
+}

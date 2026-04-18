@@ -84,6 +84,7 @@ class SupplierOut(SupplierCreate):
     logo_url: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
+    source_type: str = "private"
 
     # Invoice fields
     invoice_name: Optional[str] = None

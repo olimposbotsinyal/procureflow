@@ -1,8 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { getRoles, createRole, updateRole, deleteRole, getPermissions } from "../services/admin.service";
 import type { Role, Permission } from "../services/admin.service";
+import { useAuth } from "../hooks/useAuth";
+import { filterVisibleRoleHierarchy, isPlatformStaffUser } from "../auth/permissions";
 
 export function RolesTab() {
+  const { user } = useAuth();
+  const readOnly = isPlatformStaffUser(user);
   const [roles, setRoles] = useState<Role[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [showNewRoleForm, setShowNewRoleForm] = useState(false);
@@ -111,6 +115,10 @@ export function RolesTab() {
     );
   };
 
+  const visibleRoles = useMemo(() => {
+    return filterVisibleRoleHierarchy(roles, (user as { role?: string } | null)?.role);
+  }, [roles, user]);
+
   if (loading) {
     return <div style={{ padding: 20 }}>Yükleniyor...</div>;
   }
@@ -124,6 +132,11 @@ export function RolesTab() {
       )}
 
       <div style={{ marginBottom: 20 }}>
+        {readOnly && (
+          <div style={{ marginBottom: 12, padding: 12, borderRadius: 12, background: '#fff7ed', color: '#9a3412', border: '1px solid #fed7aa' }}>
+            Platform personeli rol hiyerarsisini inceleyebilir; yeni rol ekleme, duzenleme ve silme aksiyonlari bu yuzeyde kapatildi.
+          </div>
+        )}
         <button
           onClick={() => {
             setShowNewRoleForm(!showNewRoleForm);
@@ -131,21 +144,23 @@ export function RolesTab() {
             setRoleForm({ name: "", description: "", parent_id: undefined, is_active: true });
             setSelectedPermissions([]);
           }}
+          disabled={readOnly}
           style={{
             padding: "10px 16px",
             background: "#10b981",
             color: "white",
             border: "none",
             borderRadius: "4px",
-            cursor: "pointer",
+            cursor: readOnly ? "not-allowed" : "pointer",
             fontWeight: "bold",
+            opacity: readOnly ? 0.6 : 1,
           }}
         >
           {showNewRoleForm ? "❌ İptal" : "➕ Yeni Rol"}
         </button>
       </div>
 
-      {(showNewRoleForm || editingRoleId !== null) && (
+      {!readOnly && (showNewRoleForm || editingRoleId !== null) && (
         <div style={{ background: "#f9fafb", padding: 20, borderRadius: 8, marginBottom: 20, border: "1px solid #ddd" }}>
           <h3>{editingRoleId ? "Rolü Düzenle" : "Yeni Rol Ekle"}</h3>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
@@ -177,7 +192,7 @@ export function RolesTab() {
               style={{ padding: 8, borderRadius: 4, border: "1px solid #ddd", width: "100%", maxWidth: 300 }}
             >
               <option value="">Yok (Root Role)</option>
-              {roles
+              {visibleRoles
                 .filter((r) => r.id !== editingRoleId)
                 .map((role) => (
                   <option key={role.id} value={role.id}>
@@ -311,15 +326,16 @@ export function RolesTab() {
             <RoleTreeNode
               key={role.id}
               role={role}
-              allRoles={roles}
+              allRoles={visibleRoles}
               onEdit={handleEditRole}
               onDelete={handleDeleteRole}
+              readOnly={readOnly}
             />
           ))}
         </div>
       </div>
 
-      {roles.length === 0 && (
+      {visibleRoles.length === 0 && (
         <div style={{ padding: 20, textAlign: "center", color: "#999" }}>
           Hiç rol yoktur. Yeni bir rol oluşturun.
         </div>
@@ -328,7 +344,7 @@ export function RolesTab() {
   );
 
   function getRoleTree(parentId: number | null = null): Role[] {
-    return roles
+    return visibleRoles
       .filter((r) => r.parent_id === parentId)
       .sort((a, b) => a.hierarchy_level - b.hierarchy_level);
   }
@@ -339,6 +355,7 @@ interface RoleNodeProps {
   allRoles: Role[];
   onEdit: (role: Role) => void;
   onDelete: (id: number) => void;
+  readOnly?: boolean;
 }
 
 function RoleTreeNode({
@@ -346,6 +363,7 @@ function RoleTreeNode({
   allRoles,
   onEdit,
   onDelete,
+  readOnly = false,
 }: RoleNodeProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   
@@ -403,35 +421,39 @@ function RoleTreeNode({
           {role.is_active ? "Aktif" : "Pasif"}
         </span>
 
-        <button
-          onClick={() => onEdit(role)}
-          style={{
-            padding: "4px 12px",
-            background: "#3b82f6",
-            color: "white",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
-            fontSize: 12,
-          }}
-        >
-          Düzenle
-        </button>
+        {!readOnly && (
+          <>
+            <button
+              onClick={() => onEdit(role)}
+              style={{
+                padding: "4px 12px",
+                background: "#3b82f6",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontSize: 12,
+              }}
+            >
+              Düzenle
+            </button>
 
-        <button
-          onClick={() => onDelete(role.id)}
-          style={{
-            padding: "4px 12px",
-            background: "#ef4444",
-            color: "white",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
-            fontSize: 12,
-          }}
-        >
-          Sil
-        </button>
+            <button
+              onClick={() => onDelete(role.id)}
+              style={{
+                padding: "4px 12px",
+                background: "#ef4444",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontSize: 12,
+              }}
+            >
+              Sil
+            </button>
+          </>
+        )}
       </div>
 
       {isExpanded &&

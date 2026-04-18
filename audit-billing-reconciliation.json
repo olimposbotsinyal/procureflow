@@ -1,0 +1,27 @@
+{
+  "summary": {
+    "section_count": 3,
+    "issue_counts": {},
+    "problem_rows": 0
+  },
+  "sections": {
+    "tenant_subscriptions": {
+      "total_rows": 0,
+      "problem_rows": 0,
+      "issue_counts": {},
+      "samples": []
+    },
+    "billing_invoices": {
+      "total_rows": 0,
+      "problem_rows": 0,
+      "issue_counts": {},
+      "samples": []
+    },
+    "billing_webhook_events": {
+      "total_rows": 0,
+      "problem_rows": 0,
+      "issue_counts": {},
+      "samples": []
+    }
+  }
+}

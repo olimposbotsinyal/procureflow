@@ -7,16 +7,25 @@ import { ProjectCreateModal } from "./ProjectCreateModal";
 import type { Project } from "../types/project";
 import type { Company } from "../services/admin.service";
 
-export function ProjectsTab() {
+interface ProjectsTabProps {
+  readOnly?: boolean;
+  initialSearchTerm?: string;
+}
+
+export function ProjectsTab({ readOnly = false, initialSearchTerm = "" }: ProjectsTabProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState(initialSearchTerm);
 
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    setSearchTerm(initialSearchTerm);
+  }, [initialSearchTerm]);
 
   async function loadData() {
     try {
@@ -57,6 +66,11 @@ export function ProjectsTab() {
 
   return (
     <div>
+      {readOnly && (
+        <div style={{ marginBottom: 16, padding: 12, borderRadius: 12, background: '#fff7ed', color: '#9a3412', border: '1px solid #fed7aa' }}>
+          Platform personeli proje portfoyunu inceleyebilir; yeni proje ekleme ve silme aksiyonlari bu yuzeyde kapatildi.
+        </div>
+      )}
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", gap: "12px" }}>
         <input
@@ -74,6 +88,7 @@ export function ProjectsTab() {
         />
         <button
           onClick={() => setShowCreateModal(true)}
+          disabled={readOnly}
           style={{
             padding: "10px 16px",
             backgroundColor: "#3b82f6",
@@ -81,11 +96,11 @@ export function ProjectsTab() {
             border: "none",
             borderRadius: "6px",
             fontWeight: "bold",
-            cursor: "pointer",
+            cursor: readOnly ? "not-allowed" : "pointer",
             fontSize: "14px"
           }}
-          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#2563eb"}
-          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "#3b82f6"}
+          onMouseEnter={(e) => { if (!readOnly) e.currentTarget.style.backgroundColor = "#2563eb"; }}
+          onMouseLeave={(e) => { if (!readOnly) e.currentTarget.style.backgroundColor = "#3b82f6"; }}
         >
           ➕ Yeni Proje
         </button>
@@ -206,6 +221,7 @@ export function ProjectsTab() {
                 </Link>
                 <button
                   onClick={() => handleDelete(project.id)}
+                  disabled={readOnly}
                   style={{
                     padding: "6px 12px",
                     backgroundColor: "#ef4444",
@@ -214,11 +230,12 @@ export function ProjectsTab() {
                     borderRadius: "4px",
                     fontSize: "12px",
                     fontWeight: "600",
-                    cursor: "pointer",
+                    cursor: readOnly ? "not-allowed" : "pointer",
+                    opacity: readOnly ? 0.6 : 1,
                     transition: "background-color 0.2s"
                   }}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#dc2626"}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "#ef4444"}
+                  onMouseEnter={(e) => { if (!readOnly) e.currentTarget.style.backgroundColor = "#dc2626"; }}
+                  onMouseLeave={(e) => { if (!readOnly) e.currentTarget.style.backgroundColor = "#ef4444"; }}
                 >
                   🗑️
                 </button>

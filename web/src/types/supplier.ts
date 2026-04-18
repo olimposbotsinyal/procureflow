@@ -3,6 +3,7 @@
 export interface Supplier {
   id: number;
   created_by_id: number;
+  source_type?: "private" | "platform_network";
   company_name: string;
   logo_url?: string;
   company_title?: string;
@@ -26,7 +27,7 @@ export interface Supplier {
   created_at: string;
   updated_at?: string;
   users?: SupplierUser[];
-  quotes?: any[];
+  quotes?: SupplierQuote[];
 }
 
 export interface SupplierUser {

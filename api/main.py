@@ -1,7 +1,6 @@
 # api\main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pathlib import Path
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
@@ -21,10 +20,23 @@ from api.routers.contract_router import router as contract_router
 from api.routers.settings_router import router as settings_router
 from api.routers.user_profile_router import router as user_profile_router
 from api.routers.advanced_settings_router import router as advanced_settings_router
+from api.routers.billing_router import router as billing_router
+from api.routers.ai_lab import router as ai_lab_router
+from api.routers.onboarding_router import router as onboarding_router
+from api.routers.onboarding_saas import router as onboarding_saas_router
+from api.routers.channel import router as channel_router
+from api.routers.campaign_admin import router as campaign_admin_router
+from api.routers.payment import router as payment_router
+from api.routers.payment_admin import router as payment_admin_router
 from api.database import Base, engine, SessionLocal
-from api import models  # Import models to register them with Base
-from api.models import User, Permission, Role
+from api.models import User, Permission
 from api.core.security import get_password_hash
+
+# CRUD örnek routerlar
+from api.department_crud_example import router as department_crud_router
+from api.job_crud_example import router as job_crud_router
+from api.user_crud_example import router as user_crud_router
+from api.role_crud_example import router as role_crud_router
 
 load_dotenv()
 
@@ -47,7 +59,94 @@ async def lifespan(app: FastAPI):
             "ALTER TABLE quote_items ADD COLUMN group_key VARCHAR(50)",
             "ALTER TABLE quote_items ADD COLUMN is_group_header BOOLEAN DEFAULT 0 NOT NULL",
             "ALTER TABLE system_settings ADD COLUMN vat_rates_json TEXT DEFAULT '[1,10,20]' NOT NULL",
+            'ALTER TABLE system_settings ADD COLUMN public_pricing_json TEXT DEFAULT \'{"strategic_partner":{"plans":[]},"supplier":{"plans":[]}}\' NOT NULL',
             "ALTER TABLE supplier_quotes ADD COLUMN initial_final_amount REAL",
+            "ALTER TABLE supplier_quotes ADD COLUMN discount_percent REAL",
+            "ALTER TABLE supplier_quotes ADD COLUMN discount_amount REAL",
+            "ALTER TABLE supplier_quotes ADD COLUMN payment_terms VARCHAR(255)",
+            "ALTER TABLE supplier_quotes ADD COLUMN delivery_time INTEGER",
+            "ALTER TABLE supplier_quotes ADD COLUMN warranty VARCHAR(255)",
+            "ALTER TABLE supplier_quotes ADD COLUMN revision_number INTEGER DEFAULT 0 NOT NULL",
+            "ALTER TABLE supplier_quotes ADD COLUMN is_revised_version BOOLEAN DEFAULT 0 NOT NULL",
+            "ALTER TABLE supplier_quotes ADD COLUMN revision_of_id INTEGER",
+            "ALTER TABLE supplier_quotes ADD COLUMN profitability_amount REAL",
+            "ALTER TABLE supplier_quotes ADD COLUMN profitability_percent REAL",
+            "ALTER TABLE supplier_quotes ADD COLUMN currency VARCHAR(3) DEFAULT 'TRY' NOT NULL",
+            "ALTER TABLE supplier_quote_items ADD COLUMN notes TEXT",
+            "ALTER TABLE supplier_quote_items ADD COLUMN revision_prices TEXT",
+            "ALTER TABLE supplier_quote_items ADD COLUMN revision_number INTEGER DEFAULT 0 NOT NULL",
+            "ALTER TABLE companies ADD COLUMN logo_url VARCHAR(500)",
+            "ALTER TABLE companies ADD COLUMN trade_name VARCHAR(200)",
+            "ALTER TABLE companies ADD COLUMN tax_office VARCHAR(255)",
+            "ALTER TABLE companies ADD COLUMN tax_number VARCHAR(32)",
+            "ALTER TABLE companies ADD COLUMN registration_number VARCHAR(64)",
+            "ALTER TABLE companies ADD COLUMN address VARCHAR(500)",
+            "ALTER TABLE companies ADD COLUMN city VARCHAR(100)",
+            "ALTER TABLE companies ADD COLUMN address_district VARCHAR(100)",
+            "ALTER TABLE companies ADD COLUMN postal_code VARCHAR(10)",
+            "ALTER TABLE companies ADD COLUMN phone VARCHAR(20)",
+            "ALTER TABLE companies ADD COLUMN contact_info VARCHAR(500)",
+            "ALTER TABLE companies ADD COLUMN hide_location BOOLEAN DEFAULT FALSE NOT NULL",
+            "ALTER TABLE companies ADD COLUMN share_on_whatsapp BOOLEAN DEFAULT TRUE NOT NULL",
+            "ALTER TABLE users ADD COLUMN photo TEXT",
+            "ALTER TABLE users ADD COLUMN personal_phone VARCHAR(32)",
+            "ALTER TABLE users ADD COLUMN company_phone VARCHAR(32)",
+            "ALTER TABLE users ADD COLUMN company_phone_short VARCHAR(16)",
+            "ALTER TABLE users ADD COLUMN address VARCHAR(500)",
+            "ALTER TABLE users ADD COLUMN hide_location BOOLEAN DEFAULT FALSE NOT NULL",
+            "ALTER TABLE users ADD COLUMN share_on_whatsapp BOOLEAN DEFAULT TRUE NOT NULL",
+            "ALTER TABLE users ADD COLUMN hidden_from_admin BOOLEAN DEFAULT FALSE NOT NULL",
+            "ALTER TABLE users ADD COLUMN deleted_original_email VARCHAR(255)",
+            "ALTER TABLE users ADD COLUMN tenant_id INTEGER",
+            "ALTER TABLE users ADD COLUMN system_role VARCHAR(50) DEFAULT 'tenant_member' NOT NULL",
+            "ALTER TABLE users ADD COLUMN created_by_id INTEGER",
+            "ALTER TABLE users ADD COLUMN invitation_token VARCHAR(255)",
+            "ALTER TABLE users ADD COLUMN invitation_token_expires TIMESTAMP",
+            "ALTER TABLE users ADD COLUMN invitation_accepted BOOLEAN DEFAULT FALSE NOT NULL",
+            "CREATE UNIQUE INDEX ix_users_invitation_token ON users(invitation_token)",
+            # Faz B: 4-scope mimari
+            "ALTER TABLE users ADD COLUMN scope_type VARCHAR(20)",
+            "ALTER TABLE users ADD COLUMN role_profile_code VARCHAR(100)",
+            "ALTER TABLE companies ADD COLUMN created_by_id INTEGER",
+            "ALTER TABLE companies ADD COLUMN tenant_id INTEGER",
+            "ALTER TABLE tenants ADD COLUMN support_status VARCHAR(50) DEFAULT 'new' NOT NULL",
+            "ALTER TABLE tenants ADD COLUMN support_owner_name VARCHAR(255)",
+            "ALTER TABLE tenants ADD COLUMN support_notes TEXT",
+            "ALTER TABLE tenants ADD COLUMN support_resolution_reason TEXT",
+            "ALTER TABLE tenants ADD COLUMN support_last_contacted_at TIMESTAMP",
+            "ALTER TABLE departments ADD COLUMN created_by_id INTEGER",
+            "ALTER TABLE departments ADD COLUMN tenant_id INTEGER",
+            "ALTER TABLE projects ADD COLUMN created_by_id INTEGER",
+            "ALTER TABLE projects ADD COLUMN tenant_id INTEGER",
+            "ALTER TABLE roles ADD COLUMN created_by_id INTEGER",
+            "ALTER TABLE roles ADD COLUMN tenant_id INTEGER",
+            "ALTER TABLE company_roles ADD COLUMN sub_items_json TEXT",
+            "ALTER TABLE company_roles ADD COLUMN tenant_id INTEGER",
+            "ALTER TABLE suppliers ADD COLUMN tenant_id INTEGER",
+            "ALTER TABLE quotes ADD COLUMN tenant_id INTEGER",
+            "ALTER TABLE quote_approvals ADD COLUMN tenant_id INTEGER",
+            "ALTER TABLE quote_approvals ADD COLUMN required_business_role VARCHAR(100)",
+            "ALTER TABLE email_settings ADD COLUMN tenant_id INTEGER",
+            "ALTER TABLE system_emails ADD COLUMN tenant_id INTEGER",
+            "ALTER TABLE email_settings ADD COLUMN mail_domain VARCHAR(255)",
+            "ALTER TABLE email_settings ADD COLUMN app_url VARCHAR(500)",
+            "ALTER TABLE email_settings ADD COLUMN use_custom_app_url BOOLEAN DEFAULT FALSE NOT NULL",
+            "ALTER TABLE email_settings ADD COLUMN reply_to_email VARCHAR(255)",
+            "ALTER TABLE email_settings ADD COLUMN bounce_email VARCHAR(255)",
+            "ALTER TABLE email_settings ADD COLUMN mailbox_support_email VARCHAR(255)",
+            "ALTER TABLE email_settings ADD COLUMN enable_list_unsubscribe BOOLEAN DEFAULT TRUE NOT NULL",
+            "ALTER TABLE email_settings ADD COLUMN enable_strict_from_alignment BOOLEAN DEFAULT TRUE NOT NULL",
+            "ALTER TABLE email_settings ADD COLUMN signature_name VARCHAR(255)",
+            "ALTER TABLE email_settings ADD COLUMN signature_title VARCHAR(255)",
+            "ALTER TABLE email_settings ADD COLUMN signature_note VARCHAR(1000)",
+            "ALTER TABLE email_settings ADD COLUMN signature_image_url VARCHAR(500)",
+            "ALTER TABLE email_settings ADD COLUMN owner_user_id INTEGER",
+            "ALTER TABLE system_emails ADD COLUMN owner_user_id INTEGER",
+            "ALTER TABLE system_emails ADD COLUMN signature_name VARCHAR(255)",
+            "ALTER TABLE system_emails ADD COLUMN signature_title VARCHAR(255)",
+            "ALTER TABLE system_emails ADD COLUMN signature_note TEXT",
+            "ALTER TABLE system_emails ADD COLUMN signature_image_url VARCHAR(500)",
+            "ALTER TABLE system_emails ADD COLUMN is_active BOOLEAN DEFAULT TRUE NOT NULL",
         ]:
             try:
                 _mig_db.execute(_text(_col_sql))
@@ -59,46 +158,52 @@ async def lifespan(app: FastAPI):
 
     db = SessionLocal()
     try:
-        # Create test user if not exists
-        admin = db.query(User).filter(User.email == "test@example.com").first()
-        if not admin:
-            admin = User(
-                email="test@example.com",
-                hashed_password=get_password_hash("Test1234!"),
-                full_name="Test User",
-                role="super_admin",
-                is_active=True,
-            )
-            db.add(admin)
-            db.flush()  # Anında veritabanına yaz
-            db.commit()
-            print("[OK] ✅ Test user created: test@example.com / Test1234!")
-        else:
-            print("[OK] ℹ️ Test user already exists: test@example.com")
-
-        # Create role hierarchy if not exists
-        roles_data = [
-            ("Satın Almacı", "Temel seviye satın alma personeli", 0),
-            ("Satın Alma Uzmanı", "Satın alma uzmanlığı", 1),
-            ("Satın Alma Yöneticisi", "Satın alma yönetimi", 2),
-            ("Satın Alma Müdürü", "Proje bazında yönetim", 3),
-            ("Satın Alma Direktörü", "Stratejik karar verme", 4),
-            ("Super Admin", "Sistem yöneticisi", 5),
+        # Create test users if not exists
+        test_users = [
+            ("test@example.com", "Test1234!", "Test User", "super_admin"),
+            ("satinalmaci@example.com", "Test1234!", "Satın Almacı", "satinalmaci"),
+            (
+                "satinalmauzmani@example.com",
+                "Test1234!",
+                "Satın Alma Uzmanı",
+                "satinalma_uzmani",
+            ),
+            (
+                "satinalmayoneticisi@example.com",
+                "Test1234!",
+                "Satın Alma Yöneticisi",
+                "satinalma_yoneticisi",
+            ),
+            (
+                "satinalmadirektoru@example.com",
+                "Test1234!",
+                "Satın Alma Direktörü",
+                "satinalma_direktoru",
+            ),
         ]
 
-        for role_name, desc, level in roles_data:
-            existing = db.query(Role).filter(Role.name == role_name).first()
-            if not existing:
-                role = Role(
-                    name=role_name,
-                    description=desc,
-                    hierarchy_level=level,
-                    parent_id=None,  # Basitleştirildi - parent olmadan
-                    is_active=True,
-                )
-                db.add(role)
-
-        db.commit()
+        if db.query(User).filter(User.hidden_from_admin.is_(False)).count() == 0:
+            for email, password, full_name, role in test_users:
+                existing = db.query(User).filter(User.email == email).first()
+                if not existing:
+                    user = User(
+                        email=email,
+                        hashed_password=get_password_hash(password),
+                        full_name=full_name,
+                        role=role,
+                        system_role="super_admin"
+                        if role == "super_admin"
+                        else "tenant_member",
+                        is_active=True,
+                    )
+                    db.add(user)
+                    db.flush()
+                    db.commit()
+                    print(f"[OK] ✅ Test user created: {email} / {password}")
+                else:
+                    print(f"[OK] ℹ️ Test user already exists: {email}")
+        else:
+            print("[OK] ℹ️ Test user seed skipped: visible users already exist")
 
         # Create default permissions with Turkish names and tooltips
         permissions_data = [
@@ -337,4 +442,20 @@ app.include_router(contract_router, prefix="/api/v1")
 app.include_router(settings_router, prefix="/api/v1")
 app.include_router(user_profile_router, prefix="/api/v1")
 app.include_router(advanced_settings_router, prefix="/api/v1")
+app.include_router(billing_router, prefix="/api/v1")
+app.include_router(ai_lab_router, prefix="/api/v1")
+app.include_router(onboarding_router, prefix="/api/v1")
+app.include_router(onboarding_saas_router, prefix="/api/v1")
+app.include_router(channel_router, prefix="/api/v1")
+app.include_router(campaign_admin_router, prefix="/api/v1")
+app.include_router(payment_router, prefix="/api/v1")
+app.include_router(payment_admin_router, prefix="/api/v1")
+from api.routers.system_email_router import router as system_email_router
+
+app.include_router(system_email_router, prefix="/api/v1")
 app.include_router(files_router)
+# CRUD örnek routerlar
+app.include_router(department_crud_router, prefix="/api/v1")
+app.include_router(job_crud_router, prefix="/api/v1")
+app.include_router(user_crud_router, prefix="/api/v1")
+app.include_router(role_crud_router, prefix="/api/v1")

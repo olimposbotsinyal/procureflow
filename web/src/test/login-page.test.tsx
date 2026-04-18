@@ -35,9 +35,9 @@ describe("LoginPage", () => {
 
     renderWithAuth({ user: null, loading: false, login, logout: vi.fn() });
 
-    await user.type(screen.getByLabelText("E-posta"), "admin@example.com");
-    await user.type(screen.getByLabelText("Şifre"), "123456");
-    await user.click(screen.getByRole("button", { name: "Giriş Yap" }));
+    await user.type(screen.getByLabelText(/e-posta/i), "admin@example.com");
+    await user.type(screen.getByLabelText(/sifre/i), "123456");
+    await user.click(screen.getByRole("button", { name: /giris yap/i }));
 
     expect(login).toHaveBeenCalledWith("admin@example.com", "123456");
     expect(await screen.findByText("Dashboard")).toBeInTheDocument();
@@ -52,9 +52,9 @@ describe("LoginPage", () => {
       [{ pathname: "/login", state: { from: { pathname: "/reports" } } }]
     );
 
-    await user.type(screen.getByLabelText("E-posta"), "user@example.com");
-    await user.type(screen.getByLabelText("Şifre"), "123456");
-    await user.click(screen.getByRole("button", { name: "Giriş Yap" }));
+    await user.type(screen.getByLabelText(/e-posta/i), "user@example.com");
+    await user.type(screen.getByLabelText(/sifre/i), "123456");
+    await user.click(screen.getByRole("button", { name: /giris yap/i }));
 
     expect(await screen.findByText("Reports")).toBeInTheDocument();
   });

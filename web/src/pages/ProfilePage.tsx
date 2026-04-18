@@ -1,5 +1,6 @@
 // FILE: web/src/pages/ProfilePage.tsx
 import React, { useCallback, useEffect, useState } from "react";
+import { getUserDisplayRoleLabel } from "../auth/permissions";
 import { useProfile } from "../hooks/useProfile";
 
 export default function ProfilePage() {
@@ -242,7 +243,7 @@ export default function ProfilePage() {
                 <span>{profile.email}</span>
 
                 <strong>Rol:</strong>
-                <span>{profile.role}</span>
+                <span>{getUserDisplayRoleLabel(profile)}</span>
 
                 <strong>Durum:</strong>
                 <span style={{ color: profile.is_active ? "#10b981" : "#ef4444" }}>

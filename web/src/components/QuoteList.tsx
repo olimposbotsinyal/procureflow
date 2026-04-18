@@ -1,24 +1,23 @@
 // QuoteList Component
 import { useEffect, useState, useCallback } from "react";
-import { getQuotes, deleteQuote } from "../services/quote.service";
-import type { Quote } from "../services/quote.service";
+import { getRfqs, deleteRfq } from "../services/quote.service";
+import type { Rfq as Quote } from "../services/quote.service";
 import { Link, useNavigate } from "react-router-dom";
-import { QuoteStatusLabel, QuoteStatusColor, type QuoteStatus } from "../types/quote.types";
+import {
+  QuoteStatusLabel,
+  QuoteStatusColor,
+  normalizeQuoteStatus,
+} from "../types/quote.types";
 import { http } from "../lib/http";
 import SendQuoteModal from "./SendQuoteModal";
-
-function normalizeQuoteStatus(status: Quote["status"]): QuoteStatus {
-  const normalized = String(status).toLowerCase();
-  if (normalized === "approved") return "approved";
-  if (normalized === "rejected") return "rejected";
-  if (normalized === "submitted" || normalized === "sent" || normalized === "pending" || normalized === "responded") {
-    return "submitted";
-  }
-  return "draft";
-}
+import { useAuth } from "../hooks/useAuth";
+import { canManageQuoteWorkspace, canReviewApprovals, isPlatformStaffUser } from "../auth/permissions";
 
 export default function QuoteList() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const readOnly = isPlatformStaffUser(user);
+  const canManageQuotes = canManageQuoteWorkspace(user);
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -26,21 +25,40 @@ export default function QuoteList() {
   const [total, setTotal] = useState(0);
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [sendTarget, setSendTarget] = useState<Quote | null>(null);
-  const [projectSuppliers, setProjectSuppliers] = useState<Array<{ id: number; supplier_id: number; supplier_name: string; supplier_email: string; category?: string; is_active: boolean }>>([]);
+  const [projectSuppliers, setProjectSuppliers] = useState<Array<{ id: number; supplier_id: number; supplier_name: string; supplier_email: string; source_type?: "private" | "platform_network"; category?: string; is_active: boolean }>>([]);
+  const [pendingApprovalQuoteIds, setPendingApprovalQuoteIds] = useState<Set<number>>(new Set());
 
   const fetchQuotes = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await getQuotes(page, 10, statusFilter || undefined);
-      setQuotes(data.items);
-      setTotal(data.total);
+      const isReworkFilter = statusFilter === "rework";
+      if (isReworkFilter) {
+        const bulk = await getRfqs(1, 500, undefined);
+        const reworkItems = (bulk.items || []).filter(
+          (item) => String(item.transition_reason || "").toLowerCase().startsWith("hata ve eksikler var")
+        );
+        const offset = (page - 1) * 10;
+        setQuotes(reworkItems.slice(offset, offset + 10));
+        setTotal(reworkItems.length);
+      } else {
+        const data = await getRfqs(page, 10, statusFilter || undefined);
+        setQuotes(data.items);
+        setTotal(data.total);
+      }
+      if (canReviewApprovals(user)) {
+        const pending = await http.get<Array<{ quote_id: number }>>("/approvals/user/pending");
+        const quoteIdSet = new Set((pending.data || []).map((row) => Number(row.quote_id)));
+        setPendingApprovalQuoteIds(quoteIdSet);
+      } else {
+        setPendingApprovalQuoteIds(new Set());
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Teklif yüklenemedi");
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter]);
+  }, [page, statusFilter, user]);
 
   useEffect(() => {
     fetchQuotes();
@@ -49,7 +67,7 @@ export default function QuoteList() {
   const handleDelete = async (quoteId: number) => {
     if (!window.confirm("Bu teklifi silmek istediğinize emin misiniz?")) return;
     try {
-      await deleteQuote(quoteId);
+      await deleteRfq(quoteId);
       await fetchQuotes();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Teklif silinemedi");
@@ -85,6 +103,12 @@ export default function QuoteList() {
       <div style={{ marginBottom: "20px" }}>
         <h3>Teklifler ({total})</h3>
 
+        {readOnly && (
+          <div style={{ marginBottom: "12px", padding: "10px 12px", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "6px", color: "#1e3a8a" }}>
+            Platform personeli teklif portfoyunu inceleyebilir; yeni teklif, duzenleme, silme ve gonderim aksiyonlari salt okunur modda kapatildi.
+          </div>
+        )}
+
         {/* Filter Bar */}
         <div style={{ marginBottom: "16px", display: "flex", gap: "8px" }}>
           <select
@@ -97,25 +121,28 @@ export default function QuoteList() {
           >
             <option value="">Tüm Durumlar</option>
             <option value="draft">Taslak</option>
-            <option value="sent">Gönderildi</option>
+            <option value="submitted">Gönderildi</option>
+            <option value="rework">İade Edildi (Gözden Geçirme)</option>
             <option value="approved">Onaylandı</option>
             <option value="rejected">Reddedildi</option>
           </select>
 
-          <Link to="/quotes/create" style={{ textDecoration: "none" }}>
-            <button
-              style={{
-                padding: "8px 16px",
-                background: "#3b82f6",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              + Yeni Teklif
-            </button>
-          </Link>
+          {canManageQuotes && (
+            <Link to="/quotes/create" style={{ textDecoration: "none" }}>
+              <button
+                style={{
+                  padding: "8px 16px",
+                  background: "#3b82f6",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                }}
+              >
+                + Yeni Teklif
+              </button>
+            </Link>
+          )}
         </div>
 
         {error && (
@@ -148,9 +175,36 @@ export default function QuoteList() {
               <tbody>
                 {quotes.map((quote) => {
                   const quoteStatus = normalizeQuoteStatus(quote.status);
+                  const rawStatus = String(quote.status || "").toLowerCase();
+                  const approvalsCompleted = String(quote.transition_reason || "").toLowerCase().includes("gönderim onayları tamamlandı");
+                  const sentToSuppliers = Boolean(quote.sent_at);
+                  const canSendToSuppliers = quoteStatus === "submitted";
+                  const canEditQuote = canManageQuotes
+                    && (quoteStatus === "draft" || quoteStatus === "submitted")
+                    && !approvalsCompleted
+                    && !sentToSuppliers;
+                  const canDeleteQuote = canManageQuotes;
+                  const reviewBack = quoteStatus === "draft" && String(quote.transition_reason || "").toLowerCase().startsWith("hata ve eksikler var");
+                  const badgeLabel = reviewBack
+                    ? "İade Edildi (Gözden Geçirme)"
+                    : rawStatus === "approved"
+                      ? "Teklif Sözleşme Aşamasına Geçti - Kapatıldı"
+                      : rawStatus === "responded"
+                        ? "Tedarikçi Yanıtladı"
+                        : sentToSuppliers
+                          ? "Tedarikçiye Gönderildi - Yanıt Bekleniyor"
+                          : (quoteStatus === "submitted" && approvalsCompleted)
+                            ? "Onaylandı (Gönderime Hazır)"
+                            : QuoteStatusLabel[quoteStatus];
+                  const badgeColor = reviewBack ? "#fee2e2" : QuoteStatusColor[quoteStatus];
                   return (
                   <tr key={quote.id} style={{ borderBottom: "1px solid #eee" }}>
-                    <td style={{ padding: "12px" }}>{quote.title}</td>
+                    <td style={{ padding: "12px" }}>
+                      <div style={{ fontWeight: 600 }}>{quote.title}</div>
+                      <div style={{ marginTop: "4px", fontSize: "12px", color: "#6b7280" }}>
+                        RFQ #{quote.rfq_id ?? quote.id}
+                      </div>
+                    </td>
                     <td style={{ padding: "12px", textAlign: "right", fontWeight: "bold" }}>
                       {(quote.total_amount || quote.amount || 0).toLocaleString("tr-TR", {
                         style: "currency",
@@ -162,13 +216,24 @@ export default function QuoteList() {
                         style={{
                           padding: "4px 8px",
                           borderRadius: "4px",
-                          background: QuoteStatusColor[quoteStatus],
+                          background: badgeColor,
                           fontSize: "12px",
                           fontWeight: "bold",
+                          color: reviewBack ? "#991b1b" : "inherit",
                         }}
                       >
-                        {QuoteStatusLabel[quoteStatus]}
+                        {badgeLabel}
                       </span>
+                      {reviewBack && (
+                        <div style={{ marginTop: "6px", fontSize: "12px", color: "#991b1b" }}>
+                          {quote.transition_reason}
+                        </div>
+                      )}
+                      {pendingApprovalQuoteIds.has(quote.id) && (
+                        <div style={{ marginTop: "6px", fontSize: "12px", color: "#92400e", fontWeight: 600 }}>
+                          Tedarikçiye gönderme onayınız bekleniyor
+                        </div>
+                      )}
                     </td>
                     <td style={{ padding: "12px", fontSize: "12px" }}>
                       {new Date(quote.created_at).toLocaleDateString("tr-TR")}
@@ -181,31 +246,39 @@ export default function QuoteList() {
                         >
                           Görüntüle
                         </Link>
-                        <button
-                          onClick={() => navigate(`/quotes/${quote.id}/edit`)}
-                          style={{ border: "none", background: "transparent", color: "#0f766e", cursor: "pointer", fontWeight: 700 }}
-                        >
-                          Düzenle
-                        </button>
-                        <button
-                          onClick={() => handleDelete(quote.id)}
-                          style={{ border: "none", background: "transparent", color: "#dc2626", cursor: "pointer", fontWeight: 700 }}
-                        >
-                          Sil
-                        </button>
-                        <button
-                          onClick={() => openSendModal(quote)}
-                          style={{ border: "none", background: "transparent", color: "#1d4ed8", cursor: "pointer", fontWeight: 700 }}
-                        >
-                          Gönder
-                        </button>
-                        {(String(quote.status).toLowerCase() === "sent" || String(quote.status).toLowerCase() === "responded") && (
-                          <button
-                            onClick={() => navigate(`/quotes/${quote.id}`)}
-                            style={{ border: "none", background: "transparent", color: "#7c3aed", cursor: "pointer", fontWeight: 700 }}
-                          >
-                            Göster
-                          </button>
+                        {canManageQuotes && (
+                          <>
+                            <button
+                              onClick={() => navigate(`/quotes/${quote.id}/edit`)}
+                              disabled={!canEditQuote}
+                              title={canEditQuote ? "Teklifi düzenle" : "Onaylanan teklif düzenlenemez"}
+                              style={{ border: "none", background: "transparent", color: canEditQuote ? "#0f766e" : "#9ca3af", cursor: canEditQuote ? "pointer" : "not-allowed", fontWeight: 700 }}
+                            >
+                              Düzenle
+                            </button>
+                            {canDeleteQuote && (
+                              <button
+                                onClick={() => handleDelete(quote.id)}
+                                style={{ border: "none", background: "transparent", color: "#dc2626", cursor: "pointer", fontWeight: 700 }}
+                              >
+                                Sil
+                              </button>
+                            )}
+                            <button
+                              onClick={() => openSendModal(quote)}
+                              disabled={!canSendToSuppliers}
+                              title={canSendToSuppliers ? "Teklifi tedarikçilere gönder" : "Bu durumda teklif tekrar gönderilemez"}
+                              style={{
+                                border: "none",
+                                background: "transparent",
+                                color: canSendToSuppliers ? "#1d4ed8" : "#9ca3af",
+                                cursor: canSendToSuppliers ? "pointer" : "not-allowed",
+                                fontWeight: 700,
+                              }}
+                            >
+                              Gönder
+                            </button>
+                          </>
                         )}
                       </div>
                     </td>

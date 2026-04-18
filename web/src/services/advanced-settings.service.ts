@@ -2,6 +2,8 @@
 import { http } from "../lib/http";
 
 export interface EmailSettingsData {
+  id?: number;
+  owner_user_id?: number | null;
   smtp_host?: string;
   smtp_port?: number;
   smtp_username?: string;
@@ -11,6 +13,25 @@ export interface EmailSettingsData {
   use_tls?: boolean;
   use_ssl?: boolean;
   enable_email_notifications?: boolean;
+  mail_domain?: string;
+  app_url?: string;
+  use_custom_app_url?: boolean;
+  reply_to_email?: string;
+  bounce_email?: string;
+  mailbox_support_email?: string;
+  enable_list_unsubscribe?: boolean;
+  enable_strict_from_alignment?: boolean;
+  signature_name?: string;
+  signature_title?: string;
+  signature_note?: string;
+  signature_image_url?: string;
+}
+
+export interface EmailProfileSummary {
+  owner_user_id: number | null;
+  label: string;
+  kind: "default" | "personal";
+  from_email?: string;
 }
 
 export interface LoggingSettingsData {
@@ -60,25 +81,53 @@ export interface APIKeyData {
 /**
  * Email Settings
  */
-export async function getEmailSettings(): Promise<EmailSettingsData> {
-  const res = await http.get<EmailSettingsData>("/advanced-settings/email");
+export async function getEmailSettings(ownerUserId?: number | null): Promise<EmailSettingsData> {
+  const res = await http.get<EmailSettingsData>("/api/v1/advanced-settings/email", {
+    params: ownerUserId === undefined ? undefined : { owner_user_id: ownerUserId },
+  });
+  return res.data;
+}
+
+export async function getEmailProfiles(): Promise<EmailProfileSummary[]> {
+  const res = await http.get<EmailProfileSummary[]>("/api/v1/advanced-settings/email/profiles");
   return res.data;
 }
 
 export async function updateEmailSettings(
-  payload: EmailSettingsData
+  payload: EmailSettingsData,
+  ownerUserId?: number | null,
 ): Promise<EmailSettingsData> {
   const res = await http.put<EmailSettingsData>(
-    "/advanced-settings/email",
-    payload
+    "/api/v1/advanced-settings/email",
+    payload,
+    {
+      params: ownerUserId === undefined ? undefined : { owner_user_id: ownerUserId },
+    }
   );
   return res.data;
 }
 
-export async function testEmailSettings(toEmail: string): Promise<{ message: string }> {
+export async function testEmailSettings(toEmail: string, ownerUserId?: number | null): Promise<{ message: string }> {
   const res = await http.post<{ message: string }>(
-    "/advanced-settings/email/test",
-    { to_email: toEmail }
+    "/api/v1/advanced-settings/email/test",
+    { to_email: toEmail },
+    {
+      params: ownerUserId === undefined ? undefined : { owner_user_id: ownerUserId },
+    }
+  );
+  return res.data;
+}
+
+export async function uploadEmailSignatureImage(file: File, ownerUserId?: number | null): Promise<{ success: boolean; signature_image_url: string }> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await http.post<{ success: boolean; signature_image_url: string }>(
+    "/api/v1/advanced-settings/email/signature-image",
+    form,
+    {
+      headers: { "Content-Type": "multipart/form-data" },
+      params: ownerUserId === undefined ? undefined : { owner_user_id: ownerUserId },
+    },
   );
   return res.data;
 }
@@ -87,7 +136,7 @@ export async function testEmailSettings(toEmail: string): Promise<{ message: str
  * Logging Settings
  */
 export async function getLoggingSettings(): Promise<LoggingSettingsData> {
-  const res = await http.get<LoggingSettingsData>("/advanced-settings/logging");
+  const res = await http.get<LoggingSettingsData>("/api/v1/advanced-settings/logging");
   return res.data;
 }
 
@@ -95,7 +144,7 @@ export async function updateLoggingSettings(
   payload: LoggingSettingsData
 ): Promise<LoggingSettingsData> {
   const res = await http.put<LoggingSettingsData>(
-    "/advanced-settings/logging",
+    "/api/v1/advanced-settings/logging",
     payload
   );
   return res.data;
@@ -105,7 +154,7 @@ export async function updateLoggingSettings(
  * Backup Settings
  */
 export async function getBackupSettings(): Promise<BackupSettingsData> {
-  const res = await http.get<BackupSettingsData>("/advanced-settings/backup");
+  const res = await http.get<BackupSettingsData>("/api/v1/advanced-settings/backup");
   return res.data;
 }
 
@@ -113,7 +162,7 @@ export async function updateBackupSettings(
   payload: BackupSettingsData
 ): Promise<BackupSettingsData> {
   const res = await http.put<BackupSettingsData>(
-    "/advanced-settings/backup",
+    "/api/v1/advanced-settings/backup",
     payload
   );
   return res.data;
@@ -121,7 +170,7 @@ export async function updateBackupSettings(
 
 export async function triggerBackupManually(): Promise<{ message: string }> {
   const res = await http.post<{ message: string }>(
-    "/advanced-settings/backup/trigger"
+    "/api/v1/advanced-settings/backup/trigger"
   );
   return res.data;
 }
@@ -133,7 +182,7 @@ export async function getNotificationSettings(): Promise<
   NotificationSettingsData
 > {
   const res = await http.get<NotificationSettingsData>(
-    "/advanced-settings/notifications"
+    "/api/v1/advanced-settings/notifications"
   );
   return res.data;
 }
@@ -142,7 +191,7 @@ export async function updateNotificationSettings(
   payload: NotificationSettingsData
 ): Promise<NotificationSettingsData> {
   const res = await http.put<NotificationSettingsData>(
-    "/advanced-settings/notifications",
+    "/api/v1/advanced-settings/notifications",
     payload
   );
   return res.data;
@@ -152,12 +201,12 @@ export async function updateNotificationSettings(
  * API Keys
  */
 export async function getAPIKeys(): Promise<APIKeyData[]> {
-  const res = await http.get<APIKeyData[]>("/advanced-settings/api-keys");
+  const res = await http.get<APIKeyData[]>("/api/v1/advanced-settings/api-keys");
   return res.data;
 }
 
 export async function createAPIKey(name: string): Promise<APIKeyData> {
-  const res = await http.post<APIKeyData>("/advanced-settings/api-keys", {
+  const res = await http.post<APIKeyData>("/api/v1/advanced-settings/api-keys", {
     name,
   });
   return res.data;
@@ -165,7 +214,7 @@ export async function createAPIKey(name: string): Promise<APIKeyData> {
 
 export async function revokeAPIKey(keyId: number): Promise<{ message: string }> {
   const res = await http.delete<{ message: string }>(
-    `/advanced-settings/api-keys/${keyId}`
+    `/api/v1/advanced-settings/api-keys/${keyId}`
   );
   return res.data;
 }

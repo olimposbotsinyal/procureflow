@@ -3,6 +3,8 @@ import { useState, useEffect, useCallback } from "react";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
 import { http } from "../lib/http";
+import { isPlatformStaffUser } from "../auth/permissions";
+import { useAuth } from "../hooks/useAuth";
 import type { Supplier, SupplierUser } from "../types/supplier";
 
 function getErrorMessage(err: unknown, fallback: string): string {
@@ -209,8 +211,11 @@ const ErrorMessage = styled.div`
 `;
 
 export function SuppliersTab() {
+  const { user } = useAuth();
   const navigate = useNavigate();
+  const readOnly = isPlatformStaffUser(user);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [sourceFilter, setSourceFilter] = useState<"all" | "private" | "platform_network">("all");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -279,7 +284,9 @@ export function SuppliersTab() {
       setLoading(true);
       setError(null);
       console.log("[SuppliersTab] Loading suppliers...");
-      const response = await http.get("/suppliers");
+      const response = await http.get("/suppliers", {
+        params: sourceFilter === "all" ? undefined : { source_type: sourceFilter },
+      });
       console.log("[SuppliersTab] Suppliers loaded:", response.data);
       setSuppliers(response.data);
     } catch (err: unknown) {
@@ -289,7 +296,7 @@ export function SuppliersTab() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [sourceFilter]);
 
   useEffect(() => {
     console.log("[SuppliersTab] Component mounted, loading suppliers...");
@@ -525,19 +532,48 @@ export function SuppliersTab() {
 
   if (loading) return <Container style={{ textAlign: "center", padding: "40px", color: "#666" }}>⏳ Tedarikçiler yükleniyor...</Container>;
 
+  const supplierSourceSummary = {
+    all: suppliers.length,
+    private: suppliers.filter((supplier) => (supplier.source_type || "private") === "private").length,
+    platform_network: suppliers.filter((supplier) => (supplier.source_type || "private") === "platform_network").length,
+  };
+
   return (
     <Container>
       {error && <ErrorMessage>❌ {error}</ErrorMessage>}
       {success && <SuccessMessage>✅ {success}</SuccessMessage>}
+      {readOnly && (
+        <ErrorMessage>
+          Platform personeli tedarikçi portfoyunu inceleyebilir; yeni tedarikçi, düzenleme, silme ve tedarikçi kullanıcısı yönetimi bu yüzeyde kapatıldı.
+        </ErrorMessage>
+      )}
 
       <Header>
         <h2>Tedarikçiler</h2>
-        <Button onClick={() => setShowForm(!showForm)}>
+        <Button onClick={() => setShowForm(!showForm)} disabled={readOnly}>
           {showForm ? "İptal" : "+ Yeni Tedarikçi"}
         </Button>
       </Header>
 
-      {showForm && (
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px", marginBottom: "16px" }}>
+        {[
+          { key: "all", label: "Tum Kaynaklar", value: supplierSourceSummary.all, color: "#0f172a" },
+          { key: "private", label: "Private Supplier", value: supplierSourceSummary.private, color: "#7c3aed" },
+          { key: "platform_network", label: "Platform Agi", value: supplierSourceSummary.platform_network, color: "#0f766e" },
+        ].map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            onClick={() => setSourceFilter(item.key as "all" | "private" | "platform_network")}
+            style={{ borderRadius: "16px", border: sourceFilter === item.key ? `2px solid ${item.color}` : "1px solid #e5e7eb", background: "white", padding: "14px 16px", textAlign: "left", cursor: "pointer" }}
+          >
+            <div style={{ fontSize: "12px", fontWeight: 800, letterSpacing: "1.2px", textTransform: "uppercase", color: item.color }}>{item.label}</div>
+            <div style={{ marginTop: "8px", fontSize: "28px", fontWeight: 900, color: item.color }}>{item.value}</div>
+          </button>
+        ))}
+      </div>
+
+      {!readOnly && showForm && (
         <Form onSubmit={handleAddSupplier}>
           <FormGroup style={{ gridColumn: "1 / -1" }}>
             <Label>Şirket Adı</Label>
@@ -718,7 +754,12 @@ export function SuppliersTab() {
                 </LogoThumb>
               </td>
               <td>{supplier.company_name}</td>
-              <td>{supplier.email}</td>
+              <td>
+                <div>{supplier.email}</div>
+                <div style={{ fontSize: "12px", fontWeight: 700, color: supplier.source_type === "platform_network" ? "#0f766e" : "#7c3aed" }}>
+                  {supplier.source_type === "platform_network" ? "Platform Agi" : "Private Supplier"}
+                </div>
+              </td>
               <td>{supplier.phone}</td>
               <td>{supplier.category || "-"}</td>
               <td>{supplier.city || "-"}</td>
@@ -732,12 +773,14 @@ export function SuppliersTab() {
                   Tedarikçiyi Görüntüle
                 </ActionButton>
                 {" "}
-                <ActionButton
-                  variant="danger"
-                  onClick={() => handleDeleteSupplier(supplier.id)}
-                >
-                  Sil
-                </ActionButton>
+                {!readOnly && (
+                  <ActionButton
+                    variant="danger"
+                    onClick={() => handleDeleteSupplier(supplier.id)}
+                  >
+                    Sil
+                  </ActionButton>
+                )}
               </td>
             </tr>
           ))}
@@ -745,7 +788,7 @@ export function SuppliersTab() {
       </Table>
 
       {/* Edit Supplier Modal */}
-      {showEditModal && selectedSupplier && (
+      {!readOnly && showEditModal && selectedSupplier && (
         <Modal onClick={(e) => {
           if (e.target === e.currentTarget) {
             setShowEditModal(false);
@@ -988,7 +1031,7 @@ export function SuppliersTab() {
       )}
 
       {/* Add User Modal */}
-      {showUserModal && selectedSupplier && (
+      {!readOnly && showUserModal && selectedSupplier && (
         <Modal onClick={(e) => {
           if (e.target === e.currentTarget) {
             setShowUserModal(false);
@@ -1071,7 +1114,7 @@ export function SuppliersTab() {
       )}
 
       {/* Edit Supplier User Modal */}
-      {showUserEditModal && selectedSupplier && selectedSupplierUser && (
+      {!readOnly && showUserEditModal && selectedSupplier && selectedSupplierUser && (
         <Modal onClick={(e) => {
           if (e.target === e.currentTarget) {
             setShowUserEditModal(false);

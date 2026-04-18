@@ -1,0 +1,44 @@
+{
+  "description": "Cloudflare Redirect Rules for BUYER ASISTANS multi-domain intent",
+  "rules": [
+    {
+      "description": "Force www to apex for .com.tr",
+      "expression": "(http.host eq \"www.buyerasistans.com.tr\")",
+      "action": "redirect",
+      "action_parameters": {
+        "from_value": {
+          "status_code": 301,
+          "target_url": {
+            "expression": "concat(\"https://buyerasistans.com.tr\", http.request.uri.path, if(len(http.request.uri.query) gt 0, concat(\"?\", http.request.uri.query), \"\"))"
+          }
+        }
+      }
+    },
+    {
+      "description": "Knowledge pages to .info",
+      "expression": "(http.host ne \"buyerasistans.info\" and http.request.uri.path matches \"^/(blog|rehber|sozluk|kaynaklar)\")",
+      "action": "redirect",
+      "action_parameters": {
+        "from_value": {
+          "status_code": 301,
+          "target_url": {
+            "expression": "concat(\"https://buyerasistans.info\", http.request.uri.path, if(len(http.request.uri.query) gt 0, concat(\"?\", http.request.uri.query), \"\"))"
+          }
+        }
+      }
+    },
+    {
+      "description": "Campaign pages to .online",
+      "expression": "(http.host ne \"buyerasistans.online\" and http.request.uri.path matches \"^/(kampanya|landing|lp|promo)\")",
+      "action": "redirect",
+      "action_parameters": {
+        "from_value": {
+          "status_code": 301,
+          "target_url": {
+            "expression": "concat(\"https://buyerasistans.online\", http.request.uri.path, if(len(http.request.uri.query) gt 0, concat(\"?\", http.request.uri.query), \"\"))"
+          }
+        }
+      }
+    }
+  ]
+}

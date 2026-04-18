@@ -1,0 +1,56 @@
+
+-------------------------------------------------------------------------------
+   ROBOCOPY     ::     Robust File Copy for Windows                              
+-------------------------------------------------------------------------------
+
+  Started : 9 Nisan 2026 Perüembe 09:12:40
+   Source : D:\Projects\procureflow\
+     Dest : D:\Projects\procureflow_full_backups\scheduled\backup_20260409_091240\
+
+    Files : *.*
+	    
+Exc Files : api_debug.log
+	    history_restore_plan.txt
+	    history_restore_result.txt
+	    token.txt
+	    decode_jwt.py
+	    final_test.py
+	    find_admin.py
+	    init_db.py
+	    inspect_users_table.py
+	    seed_test_user.py
+	    settings.json
+	    settings_default.json
+	    check_*.py
+	    create_*.py
+	    debug_*.py
+	    fix_*.py
+	    load_*.py
+	    test_*.py
+	    
+ Exc Dirs : .git
+	    .venv
+	    api\.venv
+	    api\node_modules
+	    web\node_modules
+	    web\coverage
+	    web\dist
+	    
+  Options : *.* /NDL /NFL /S /E /DCOPY:DA /COPY:DAT /NP /R:1 /W:1 
+
+------------------------------------------------------------------------------
+
+
+------------------------------------------------------------------------------
+
+               Total    Copied   Skipped  Mismatch    FAILED    Extras
+    Dirs :      1437      1433         4         0         0         0
+   Files :     16160     16139        21         0         0         1
+   Bytes :  937.41 m  937.37 m    42.4 k         0         0         0
+   Times :   0:00:07   0:00:05                       0:00:00   0:00:01
+
+
+   Speed :           164.366.448 Bytes/sec.
+   Speed :              9405,124 MegaBytes/min.
+   Ended : 9 Nisan 2026 Perüembe 09:12:47
+

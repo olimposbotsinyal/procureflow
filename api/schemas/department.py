@@ -21,6 +21,8 @@ class DepartmentUpdate(BaseModel):
 
 class DepartmentOut(DepartmentBase):
     id: int
+    created_by_id: int | None = None
     created_at: datetime
     updated_at: datetime
+    sub_items: list[dict[str, int | str]] = []
     model_config = ConfigDict(from_attributes=True)

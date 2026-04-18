@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from api.models.user import User
     from api.models.project import Project
     from api.models.quote import Quote, QuoteItem
+    from api.models.tenant import Tenant
 
 
 class Supplier(Base):
@@ -29,6 +30,9 @@ class Supplier(Base):
     __tablename__ = "suppliers"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tenants.id"), nullable=True, index=True
+    )
     created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
 
     # Firma Bilgileri
@@ -83,6 +87,7 @@ class Supplier(Base):
     )
 
     # İlişkiler
+    tenant: Mapped["Tenant | None"] = relationship("Tenant", back_populates="suppliers")
     created_by: Mapped["User"] = relationship("User", foreign_keys=[created_by_id])
     users: Mapped[list["SupplierUser"]] = relationship(
         "SupplierUser", back_populates="supplier", cascade="all, delete-orphan"
@@ -90,6 +95,10 @@ class Supplier(Base):
     quotes: Mapped[list["SupplierQuote"]] = relationship(
         "SupplierQuote", back_populates="supplier", cascade="all, delete-orphan"
     )
+
+    @property
+    def source_type(self) -> str:
+        return "private" if self.tenant_id is not None else "platform_network"
 
 
 class SupplierUser(Base):
@@ -160,6 +169,9 @@ class SupplierQuote(Base):
     status: Mapped[str] = mapped_column(String(50), default="tasarı")
 
     # Finansal
+    currency: Mapped[str] = mapped_column(
+        String(3), nullable=False, default="TRY", server_default=text("'TRY'")
+    )
     total_amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     discount_percent: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
     discount_amount: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)

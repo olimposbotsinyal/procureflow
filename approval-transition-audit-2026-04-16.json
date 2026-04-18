@@ -1,0 +1,17 @@
+{
+  "total_users": 18,
+  "users_with_issues": 0,
+  "issue_counts": {},
+  "mismatches": [],
+  "quote_approval_transition": {
+    "total_quote_approvals": 6,
+    "quote_approvals_with_issues": 0,
+    "issue_counts": {},
+    "samples": [],
+    "repair_preview": {
+      "preview_rows": 0,
+      "fix_type_counts": {},
+      "samples": []
+    }
+  }
+}

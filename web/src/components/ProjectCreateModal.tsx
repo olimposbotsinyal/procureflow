@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { createProject } from "../services/project.service";
-import { getCompanies } from "../services/admin.service";
+import { getCompanies, getTenantUsers } from "../services/admin.service";
 import { modalStyles } from "../styles/modalStyles";
-import type { Company } from "../services/admin.service";
+import type { Company, TenantUser } from "../services/admin.service";
 
 interface ProjectCreateModalProps {
   isOpen: boolean;
@@ -13,6 +13,7 @@ interface ProjectCreateModalProps {
 
 export function ProjectCreateModal({ isOpen, onClose, onSuccess }: ProjectCreateModalProps) {
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [personnel, setPersonnel] = useState<TenantUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -23,6 +24,7 @@ export function ProjectCreateModal({ isOpen, onClose, onSuccess }: ProjectCreate
   const [managerName, setManagerName] = useState("");
   const [managerPhone, setManagerPhone] = useState("");
   const [managerEmail, setManagerEmail] = useState("");
+  const [responsibleUserIds, setResponsibleUserIds] = useState<number[]>([]);
   const [address, setAddress] = useState("");
   const [budget, setBudget] = useState<number | undefined>();
   const [isActive, setIsActive] = useState(true);
@@ -31,7 +33,10 @@ export function ProjectCreateModal({ isOpen, onClose, onSuccess }: ProjectCreate
     if (isOpen && companies.length === 0) {
       loadCompanies();
     }
-  }, [isOpen, companies.length]);
+    if (isOpen && personnel.length === 0) {
+      loadPersonnel();
+    }
+  }, [isOpen, companies.length, personnel.length]);
 
   async function loadCompanies() {
     try {
@@ -40,6 +45,21 @@ export function ProjectCreateModal({ isOpen, onClose, onSuccess }: ProjectCreate
     } catch (err) {
       setError("Firmalar yüklenemedi: " + String(err));
     }
+  }
+
+  async function loadPersonnel() {
+    try {
+      const data = await getTenantUsers();
+      setPersonnel(data.filter((p) => p.is_active));
+    } catch (err) {
+      setError("Personel yüklenemedi: " + String(err));
+    }
+  }
+
+  function toggleResponsibleUser(userId: number) {
+    setResponsibleUserIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
+    );
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -59,9 +79,11 @@ export function ProjectCreateModal({ isOpen, onClose, onSuccess }: ProjectCreate
         project_type: projectType,
         manager_name: managerName || undefined,
         manager_phone: managerPhone || undefined,
+        manager_email: managerEmail || undefined,
         address: address || undefined,
         budget: budget || undefined,
         is_active: isActive,
+        responsible_user_ids: responsibleUserIds,
       });
 
       onSuccess();
@@ -93,6 +115,7 @@ export function ProjectCreateModal({ isOpen, onClose, onSuccess }: ProjectCreate
     setManagerName("");
     setManagerPhone("");
     setManagerEmail("");
+    setResponsibleUserIds([]);
     setAddress("");
     setBudget(undefined);
     setIsActive(true);
@@ -209,6 +232,27 @@ export function ProjectCreateModal({ isOpen, onClose, onSuccess }: ProjectCreate
               placeholder="yetkili@example.com"
               style={modalStyles.input}
             />
+          </div>
+
+          {/* Responsible Purchasing Personnel */}
+          <div style={modalStyles.fullWidth}>
+            <label style={modalStyles.label}>Satın Alma Sorumluları</label>
+            <div style={{ maxHeight: "140px", overflowY: "auto", border: "1px solid #d1d5db", borderRadius: "6px", padding: "8px" }}>
+              {personnel.length === 0 ? (
+                <div style={{ fontSize: "12px", color: "#6b7280" }}>Personel bulunamadı</div>
+              ) : (
+                personnel.map((p) => (
+                  <label key={p.id} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px", fontSize: "13px", cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={responsibleUserIds.includes(p.id)}
+                      onChange={() => toggleResponsibleUser(p.id)}
+                    />
+                    <span>{p.full_name} ({p.email})</span>
+                  </label>
+                ))
+              )}
+            </div>
           </div>
 
           {/* Address */}

@@ -1,0 +1,23 @@
+{
+  "summary": {
+    "section_count": 2,
+    "issue_counts": {}
+  },
+  "sections": {
+    "quotes": {
+      "total_rows": 23,
+      "issue_counts": {},
+      "samples": [],
+      "repair_preview": {
+        "preview_rows": 0,
+        "fix_type_counts": {},
+        "samples": []
+      }
+    },
+    "supplier_quotes": {
+      "total_rows": 20,
+      "issue_counts": {},
+      "samples": []
+    }
+  }
+}

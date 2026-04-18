@@ -94,6 +94,7 @@ const ProjectCard = styled.div`
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   padding: 24px;
+  overflow: hidden;
   transition: box-shadow 0.3s, transform 0.3s;
   cursor: pointer;
 
@@ -155,7 +156,7 @@ const ProjectCard = styled.div`
     margin-top: 16px;
   }
 
-  button {
+  .actions > button {
     flex: 1;
     padding: 10px;
     border: none;
@@ -229,6 +230,28 @@ export interface Project {
 export interface AssignedProject extends Project {
   supplier_status?: string;
   quote_submitted?: boolean;
+  company?: {
+    id?: number | null;
+    name?: string;
+    logo_url?: string | null;
+  };
+  quote?: {
+    id?: number | null;
+    title?: string;
+    description?: string | null;
+    status?: string | null;
+  };
+  supplier_quote?: {
+    id?: number | null;
+    status?: string | null;
+    submitted?: boolean;
+  };
+  project_files?: Array<{
+    id: number;
+    name: string;
+    size: number;
+    file_type?: string;
+  }>;
 }
 
 export default function SupplierDashboard() {
@@ -291,14 +314,99 @@ export default function SupplierDashboard() {
     void loadSupplierIdentity();
   }, [loadProjects, loadSupplierIdentity]);
 
-  const handleViewProject = (projectId: number) => {
-    alert(`⏰ Proje #${projectId} detayları çok yakında kullanılabilir olacak!`);
-    // navigate(`/supplier/project/${projectId}`);
+  const resolveLogo = (logo?: string | null) => {
+    if (!logo) return null;
+    if (logo.startsWith("http")) return logo;
+    const base = import.meta.env.VITE_API_BASE_URL?.replace("/api/v1", "") || window.location.origin;
+    return `${base}${logo}`;
   };
 
-  const handleSubmitQuote = (projectId: number) => {
-    alert(`⏰ Proje #${projectId} için teklif gönderme fonksiyonu çok yakında kullanılabilir olacak!`);
-    // navigate(`/supplier/project/${projectId}/quote`);
+  const openFile = async (fileId: number, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    e?.preventDefault();
+    const token = getSupplierAccessToken();
+    if (!token) return;
+
+    try {
+      const base = import.meta.env.VITE_API_BASE_URL?.replace("/api/v1", "") || window.location.origin;
+      const response = await fetch(`${base}/api/v1/files/${fileId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error((data as { detail?: string })?.detail || "Dosya açılamadı");
+      }
+
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      window.open(blobUrl, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Dosya açılamadı";
+      alert(msg);
+    }
+  };
+
+  const downloadFile = async (fileId: number, fileName: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    e?.preventDefault();
+    const token = getSupplierAccessToken();
+    if (!token) return;
+
+    try {
+      const base = import.meta.env.VITE_API_BASE_URL?.replace("/api/v1", "") || window.location.origin;
+      const response = await fetch(`${base}/api/v1/files/${fileId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error((data as { detail?: string })?.detail || "Dosya indirilemedi");
+      }
+
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Dosya indirilemedi";
+      alert(msg);
+    }
+  };
+
+  const handleRespondQuote = (project: AssignedProject) => {
+    if (!project.supplier_quote?.id) {
+      alert("Bu proje için henüz oluşturulmuş bir teklif kaydı bulunmuyor.");
+      return;
+    }
+    navigate(`/supplier/workspace?tab=offers&supplierQuoteId=${project.supplier_quote.id}`);
+  };
+
+  const handleDeclineQuote = async (project: AssignedProject) => {
+    if (!project.supplier_quote?.id) {
+      alert("Bu proje için reddedilecek teklif kaydı bulunmuyor.");
+      return;
+    }
+    const reason = window.prompt("Cevaplamayı reddetme nedenini yazın (opsiyonel):", "");
+    if (reason === null) return;
+
+    try {
+      await http.post(`/supplier-quotes/${project.supplier_quote.id}/decline${reason ? `?reason=${encodeURIComponent(reason)}` : ""}`);
+      await loadProjects();
+      alert("Teklif cevaplama reddi kaydedildi.");
+    } catch (err: unknown) {
+      const detail =
+        typeof err === "object" && err !== null && "response" in err
+          ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+          : undefined;
+      alert(detail || "Reddetme işlemi başarısız.");
+    }
   };
 
   const handleEditProfile = () => {
@@ -384,48 +492,66 @@ export default function SupplierDashboard() {
             <ProjectsGrid>
               {projects.map((project) => (
                 <ProjectCard key={project.id}>
-                  <h3>{project.name}</h3>
-
-                  <div className="status-badge pending">
-                    {project.quote_submitted
-                      ? "📬 Teklif Gönderildi"
-                      : "📝 Teklif Bekleniyor"}
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                    {resolveLogo(project.company?.logo_url) ? (
+                      <img
+                        src={resolveLogo(project.company?.logo_url) || ""}
+                        alt={`${project.company?.name || "Firma"} logosu`}
+                        style={{ width: 42, height: 42, objectFit: "contain", borderRadius: 8, border: "1px solid #e5e7eb", background: "#fff" }}
+                      />
+                    ) : (
+                      <div style={{ width: 42, height: 42, borderRadius: 8, border: "1px solid #e5e7eb", display: "grid", placeItems: "center", color: "#94a3b8" }}>🏢</div>
+                    )}
+                    <div>
+                      <div style={{ fontSize: 12, color: "#64748b" }}>Firma</div>
+                      <div style={{ fontWeight: 700, color: "#0f172a" }}>{project.company?.name || "Firma bilgisi yok"}</div>
+                    </div>
                   </div>
 
-                  <div className="project-meta">
-                    {project.description && (
-                      <span>
-                        <strong>📋</strong> {project.description.substring(0, 50)}
-                        ...
-                      </span>
-                    )}
-                    {project.budget && (
-                      <span>
-                        <strong>💰</strong> Bütçe:{" "}
-                        {new Intl.NumberFormat("tr-TR", {
-                          style: "currency",
-                          currency: "TRY",
-                        }).format(project.budget)}
-                      </span>
+                  <h3 style={{ marginBottom: 8 }}>{project.name}</h3>
+
+                  <div className="status-badge pending" style={{ marginBottom: 10 }}>
+                    {project.supplier_quote?.submitted ? "Teklif Gönderildi" : "Teklif Bekleniyor"}
+                  </div>
+
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 12, color: "#64748b" }}>Teklif Başlığı</div>
+                    <div style={{ fontWeight: 700, color: "#1f2937" }}>{project.quote?.title || "Teklif yok"}</div>
+                  </div>
+
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 12, color: "#64748b" }}>Teklif Açıklaması</div>
+                    <div style={{ color: "#374151", fontSize: 13 }}>{project.quote?.description || "Açıklama girilmemiş"}</div>
+                  </div>
+
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 12, color: "#64748b", marginBottom: 6 }}>Bu Projenin Dosyaları</div>
+                    {(project.project_files || []).length === 0 ? (
+                      <div style={{ fontSize: 12, color: "#9ca3af" }}>Dosya yok</div>
+                    ) : (
+                      <div style={{ display: "grid", gap: 6 }}>
+                        {(project.project_files || []).slice(0, 4).map((f) => (
+                          <div key={f.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 8px" }}>
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: 12, color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</div>
+                              <div style={{ fontSize: 11, color: "#94a3b8" }}>{(f.size / 1024).toFixed(1)} KB</div>
+                            </div>
+                            <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                              <button onClick={(e) => { void openFile(f.id, e); }} type="button" style={{ padding: "6px 8px", fontSize: 11, borderRadius: 6, border: "1px solid #cbd5e1", background: "#f8fafc", color: "#334155", cursor: "pointer", whiteSpace: "nowrap" }}>Aç</button>
+                              <button onClick={(e) => { void downloadFile(f.id, f.name, e); }} type="button" style={{ padding: "6px 8px", fontSize: 11, borderRadius: 6, border: "1px solid #93c5fd", background: "#dbeafe", color: "#1e40af", cursor: "pointer", whiteSpace: "nowrap" }}>İndir</button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
 
                   <div className="actions">
-                    <button
-                      className="primary"
-                      disabled
-                      onClick={() => handleSubmitQuote(project.id)}
-                      title="Çok yakında kullanılabilir"
-                    >
-                      {project.quote_submitted ? "📝 Teklifi Düzenle" : "📝 Teklif Gönder"}
+                    <button className="primary" onClick={() => handleRespondQuote(project)}>
+                      Teklifi Cevapla
                     </button>
-                    <button
-                      className="secondary"
-                      disabled
-                      onClick={() => handleViewProject(project.id)}
-                      title="Çok yakında kullanılabilir"
-                    >
-                      👁️ Detaylar
+                    <button className="secondary" onClick={() => handleDeclineQuote(project)}>
+                      Cevaplamayı Reddet
                     </button>
                   </div>
                 </ProjectCard>

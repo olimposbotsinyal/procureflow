@@ -9,6 +9,12 @@
 - **Email**: SMTP (olimposyapi.com) SPF/DKIM/DMARC ile hardened
 - **Auth**: JWT tokens + refresh tokens + magic links (tedarikçi)
 
+Ek donusum referansi:
+
+- Tenant-SaaS hedef mimarisi ve uygulama adimlari icin
+  [TENANT_SAAS_TRANSFORMATION_PLAN.md](TENANT_SAAS_TRANSFORMATION_PLAN.md)
+  dosyasini kullanin.
+
 ---
 
 ## 2) Dizin Yapısı ve Sorumlulukları

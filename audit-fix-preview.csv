@@ -1,0 +1,6 @@
+id,email,full_name,role,system_role,old_system_role,new_system_role,quote_id,approval_level,old_required_role,old_required_business_role,new_required_role,new_required_business_role,tenant_id,created_by_id,is_active,issues,fixes
+1,deleted-user-1-20260414164420@procureflow.local,,admin,,tenant_member,tenant_admin,,,,,,,,,,,set_system_role:tenant_admin
+4,superadmin@procureflow.com,,super_admin,,tenant_member,super_admin,,,,,,,,,,,set_system_role:super_admin
+10,deleted-user-10-20260414164316@procureflow.local,,admin,,tenant_member,tenant_admin,,,,,,,,,,,set_system_role:tenant_admin
+17,Serkaneryilmazz@gmail.com,,admin,,tenant_member,tenant_admin,,,,,,,,,,,set_system_role:tenant_admin
+18,test@example.com,,super_admin,,tenant_member,super_admin,,,,,,,,,,,set_system_role:super_admin

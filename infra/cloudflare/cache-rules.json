@@ -1,0 +1,37 @@
+{
+  "description": "Cloudflare Cache Rules for BUYER ASISTANS",
+  "rules": [
+    {
+      "description": "Bypass cache for API",
+      "expression": "starts_with(http.request.uri.path, \"/api/\")",
+      "action": "set_cache_settings",
+      "action_parameters": {
+        "cache": false
+      }
+    },
+    {
+      "description": "Cache static assets aggressively",
+      "expression": "http.request.uri.path matches \"^/(assets|brand|images|static)/\"",
+      "action": "set_cache_settings",
+      "action_parameters": {
+        "cache": true,
+        "edge_ttl": {
+          "mode": "override_origin",
+          "default": 604800
+        }
+      }
+    },
+    {
+      "description": "Short TTL for campaign pages",
+      "expression": "(http.host eq \"buyerasistans.online\")",
+      "action": "set_cache_settings",
+      "action_parameters": {
+        "cache": true,
+        "edge_ttl": {
+          "mode": "override_origin",
+          "default": 300
+        }
+      }
+    }
+  ]
+}
